@@ -1,11 +1,12 @@
 "use server";
 
+import { put } from "@vercel/blob";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
-import { auditLog, bookings, customers, salons, services, staff, storefrontImages } from "@/db/schema";
+import { auditLog, bookings, businessHours, customers, reviews, salons, serviceCategories, services, staff, storefrontImages } from "@/db/schema";
 import { requireSession } from "@/lib/session";
 import { requireStripe } from "@/lib/stripe";
 import { syncStripeConnectStatus } from "@/lib/stripe-connect";
@@ -13,66 +14,96 @@ import { env } from "@/lib/env";
 import { sendOutcome } from "@/lib/email";
 
 const optionalUrl = z.string().trim().url().optional().or(z.literal(""));
+const optionalUuid = z.string().uuid().optional().or(z.literal(""));
+
+async function revalidateBusiness(salonId: string) {
+  const salon = await db.query.salons.findFirst({ where: eq(salons.id, salonId) });
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/staff");
+  revalidatePath("/dashboard/services");
+  revalidatePath("/discover");
+  if (salon) revalidatePath(`/book/${salon.slug}`);
+}
 
 export async function createServiceAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({ name: z.string().min(2), description: z.string().optional(), durationMinutes: z.coerce.number().int().min(5).max(600), price: z.coerce.number().min(0), deposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
-  await db.insert(services).values({ salonId: session.salonId, name: input.name, description: input.description, durationMinutes: input.durationMinutes, priceCents: Math.round(input.price * 100), depositCents: Math.round(input.deposit * 100) });
-  revalidatePath("/dashboard/services");
+  const input = z.object({
+    name: z.string().min(2), description: z.string().optional(), categoryId: optionalUuid,
+    durationMinutes: z.coerce.number().int().min(5).max(600), price: z.coerce.number().min(0), deposit: z.coerce.number().min(0),
+  }).parse(Object.fromEntries(formData));
+  await db.insert(services).values({ salonId: session.salonId, categoryId: input.categoryId || null, name: input.name, description: input.description, durationMinutes: input.durationMinutes, priceCents: Math.round(input.price * 100), depositCents: Math.round(input.deposit * 100) });
+  await revalidateBusiness(session.salonId);
+}
+
+export async function createServiceCategoryAction(formData: FormData) {
+  const session = await requireSession();
+  const input = z.object({ name: z.string().trim().min(2).max(120), description: z.string().trim().max(500).optional() }).parse(Object.fromEntries(formData));
+  const rows = await db.query.serviceCategories.findMany({ where: eq(serviceCategories.salonId, session.salonId) });
+  await db.insert(serviceCategories).values({ salonId: session.salonId, name: input.name, description: input.description || null, sortOrder: rows.length });
+  await revalidateBusiness(session.salonId);
 }
 
 export async function createStaffAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({ name: z.string().min(2), email: z.string().email().optional().or(z.literal("")), phone: z.string().optional() }).parse(Object.fromEntries(formData));
-  await db.insert(staff).values({ salonId: session.salonId, name: input.name, email: input.email || null, phone: input.phone || null });
-  revalidatePath("/dashboard/staff");
+  const input = z.object({
+    name: z.string().min(2), title: z.string().trim().max(160).optional(), bio: z.string().trim().max(2000).optional(),
+    email: z.string().email().optional().or(z.literal("")), phone: z.string().optional(), photoUrl: optionalUrl,
+  }).parse(Object.fromEntries(formData));
+  await db.insert(staff).values({ salonId: session.salonId, name: input.name, title: input.title || null, bio: input.bio || null, photoUrl: input.photoUrl || null, email: input.email || null, phone: input.phone || null });
+  await revalidateBusiness(session.salonId);
+}
+
+export async function updateStaffProfileAction(formData: FormData) {
+  const session = await requireSession();
+  const input = z.object({ staffId: z.string().uuid(), title: z.string().trim().max(160).optional(), bio: z.string().trim().max(2000).optional() }).parse(Object.fromEntries(formData));
+  await db.update(staff).set({ title: input.title || null, bio: input.bio || null }).where(and(eq(staff.id, input.staffId), eq(staff.salonId, session.salonId)));
+  await revalidateBusiness(session.salonId);
 }
 
 export async function updateSalonAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({ name: z.string().min(2), phone: z.string().optional(), address: z.string().optional(), county: z.string().optional(), cancellationWindowHours: z.coerce.number().int().min(1).max(168), defaultDeposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
+  const input = z.object({ name: z.string().min(2), phone: z.string().optional(), address: z.string().optional(), county: z.string().optional(), eircode: z.string().optional(), cancellationWindowHours: z.coerce.number().int().min(1).max(168), defaultDeposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
   await db.update(salons).set({ ...input, defaultDepositCents: Math.round(input.defaultDeposit * 100), updatedAt: new Date() }).where(eq(salons.id, session.salonId));
-  revalidatePath("/dashboard/settings");
+  await revalidateBusiness(session.salonId);
 }
 
 export async function updateStorefrontAction(formData: FormData) {
   const session = await requireSession();
   const input = z.object({
-    businessCategory: z.string().trim().min(2).max(80),
-    tagline: z.string().trim().max(180).optional(),
-    description: z.string().trim().max(4000).optional(),
-    logoUrl: optionalUrl,
-    coverImageUrl: optionalUrl,
-    accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-    instagramUrl: optionalUrl,
-    facebookUrl: optionalUrl,
-    tiktokUrl: optionalUrl,
-    websiteUrl: optionalUrl,
-    seoTitle: z.string().trim().max(180).optional(),
-    seoDescription: z.string().trim().max(320).optional(),
-    storefrontPublished: z.enum(["on"]).optional(),
+    businessCategory: z.string().trim().min(2).max(80), tagline: z.string().trim().max(180).optional(), description: z.string().trim().max(4000).optional(),
+    logoUrl: optionalUrl, coverImageUrl: optionalUrl, accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), storefrontTheme: z.enum(["modern", "minimal", "warm", "bold"]),
+    instagramUrl: optionalUrl, facebookUrl: optionalUrl, tiktokUrl: optionalUrl, websiteUrl: optionalUrl,
+    seoTitle: z.string().trim().max(180).optional(), seoDescription: z.string().trim().max(320).optional(), storefrontPublished: z.enum(["on"]).optional(),
   }).parse(Object.fromEntries(formData));
-
   await db.update(salons).set({
-    businessCategory: input.businessCategory,
-    tagline: input.tagline || null,
-    description: input.description || null,
-    logoUrl: input.logoUrl || null,
-    coverImageUrl: input.coverImageUrl || null,
-    accentColor: input.accentColor,
-    instagramUrl: input.instagramUrl || null,
-    facebookUrl: input.facebookUrl || null,
-    tiktokUrl: input.tiktokUrl || null,
-    websiteUrl: input.websiteUrl || null,
-    seoTitle: input.seoTitle || null,
-    seoDescription: input.seoDescription || null,
-    storefrontPublished: input.storefrontPublished === "on",
-    updatedAt: new Date(),
+    businessCategory: input.businessCategory, tagline: input.tagline || null, description: input.description || null,
+    logoUrl: input.logoUrl || null, coverImageUrl: input.coverImageUrl || null, accentColor: input.accentColor, storefrontTheme: input.storefrontTheme,
+    instagramUrl: input.instagramUrl || null, facebookUrl: input.facebookUrl || null, tiktokUrl: input.tiktokUrl || null, websiteUrl: input.websiteUrl || null,
+    seoTitle: input.seoTitle || null, seoDescription: input.seoDescription || null, storefrontPublished: input.storefrontPublished === "on", updatedAt: new Date(),
   }).where(eq(salons.id, session.salonId));
+  await revalidateBusiness(session.salonId);
+}
 
-  const salon = await db.query.salons.findFirst({ where: eq(salons.id, session.salonId) });
-  revalidatePath("/dashboard/settings");
-  if (salon) revalidatePath(`/book/${salon.slug}`);
+export async function uploadStorefrontMediaAction(formData: FormData) {
+  const session = await requireSession();
+  const target = z.enum(["logo", "cover", "gallery", "staff"]).parse(formData.get("target"));
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Choose an image to upload.");
+  if (!file.type.startsWith("image/")) throw new Error("Only image files are supported.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Images must be smaller than 5 MB.");
+  const blob = await put(`surebook/${session.salonId}/${target}-${file.name}`, file, { access: "public", addRandomSuffix: true });
+  if (target === "logo") await db.update(salons).set({ logoUrl: blob.url, updatedAt: new Date() }).where(eq(salons.id, session.salonId));
+  if (target === "cover") await db.update(salons).set({ coverImageUrl: blob.url, updatedAt: new Date() }).where(eq(salons.id, session.salonId));
+  if (target === "gallery") {
+    const existing = await db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) });
+    if (existing.length >= 12) throw new Error("A storefront can have up to 12 gallery images.");
+    await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: blob.url, altText: String(formData.get("altText") || "") || null, sortOrder: existing.length });
+  }
+  if (target === "staff") {
+    const staffId = z.string().uuid().parse(formData.get("staffId"));
+    await db.update(staff).set({ photoUrl: blob.url }).where(and(eq(staff.id, staffId), eq(staff.salonId, session.salonId)));
+  }
+  await revalidateBusiness(session.salonId);
 }
 
 export async function addStorefrontImageAction(formData: FormData) {
@@ -81,53 +112,52 @@ export async function addStorefrontImageAction(formData: FormData) {
   const existing = await db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) });
   if (existing.length >= 12) throw new Error("A storefront can have up to 12 gallery images.");
   await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: input.imageUrl, altText: input.altText || null, sortOrder: existing.length });
-  const salon = await db.query.salons.findFirst({ where: eq(salons.id, session.salonId) });
-  revalidatePath("/dashboard/settings");
-  if (salon) revalidatePath(`/book/${salon.slug}`);
+  await revalidateBusiness(session.salonId);
 }
 
 export async function removeStorefrontImageAction(formData: FormData) {
   const session = await requireSession();
   const imageId = z.string().uuid().parse(formData.get("imageId"));
   await db.delete(storefrontImages).where(and(eq(storefrontImages.id, imageId), eq(storefrontImages.salonId, session.salonId)));
-  const salon = await db.query.salons.findFirst({ where: eq(salons.id, session.salonId) });
-  revalidatePath("/dashboard/settings");
-  if (salon) revalidatePath(`/book/${salon.slug}`);
+  await revalidateBusiness(session.salonId);
+}
+
+export async function updateBusinessHoursAction(formData: FormData) {
+  const session = await requireSession();
+  await db.transaction(async (tx) => {
+    for (let day = 0; day < 7; day += 1) {
+      const closed = formData.get(`closed_${day}`) === "on";
+      const openTime = String(formData.get(`open_${day}`) || "09:00");
+      const closeTime = String(formData.get(`close_${day}`) || "17:00");
+      const existing = await tx.query.businessHours.findFirst({ where: and(eq(businessHours.salonId, session.salonId), eq(businessHours.dayOfWeek, day)) });
+      const values = { closed, openTime: closed ? null : openTime, closeTime: closed ? null : closeTime };
+      if (existing) await tx.update(businessHours).set(values).where(eq(businessHours.id, existing.id));
+      else await tx.insert(businessHours).values({ salonId: session.salonId, dayOfWeek: day, ...values });
+    }
+  });
+  await revalidateBusiness(session.salonId);
+}
+
+export async function moderateReviewAction(formData: FormData) {
+  const session = await requireSession();
+  const reviewId = z.string().uuid().parse(formData.get("reviewId"));
+  const approved = formData.get("approved") === "true";
+  await db.update(reviews).set({ approved }).where(and(eq(reviews.id, reviewId), eq(reviews.salonId, session.salonId)));
+  await revalidateBusiness(session.salonId);
 }
 
 export async function startStripeOnboardingAction() {
   const session = await requireSession();
   const salon = await db.query.salons.findFirst({ where: eq(salons.id, session.salonId) });
   if (!salon) redirect("/login");
-
   const stripe = requireStripe();
   let accountId = salon.stripeAccountId;
-
   if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "standard",
-      country: "IE",
-      email: salon.email,
-      business_profile: {
-        name: salon.name,
-        product_description: `${salon.businessCategory} appointment deposits`,
-      },
-      metadata: { salonId: salon.id },
-    });
-
+    const account = await stripe.accounts.create({ type: "standard", country: "IE", email: salon.email, business_profile: { name: salon.name, product_description: `${salon.businessCategory} appointment deposits` }, metadata: { salonId: salon.id } });
     accountId = account.id;
     await db.update(salons).set({ stripeAccountId: accountId, updatedAt: new Date() }).where(eq(salons.id, salon.id));
-  } else {
-    await syncStripeConnectStatus(salon.id);
-  }
-
-  const link = await stripe.accountLinks.create({
-    account: accountId,
-    type: "account_onboarding",
-    refresh_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=refresh`,
-    return_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=return`,
-  });
-
+  } else await syncStripeConnectStatus(salon.id);
+  const link = await stripe.accountLinks.create({ account: accountId, type: "account_onboarding", refresh_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=refresh`, return_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=return` });
   redirect(link.url);
 }
 
@@ -150,6 +180,5 @@ export async function recordOutcomeAction(formData: FormData) {
     await tx.insert(auditLog).values({ salonId: session.salonId, action: `booking.${outcome}`, entityType: "booking", entityId: booking.id });
   });
   if (booking.customer.email) await sendOutcome({ to: booking.customer.email, salon: booking.salon.name, outcome, depositCents: booking.depositCents });
-  revalidatePath("/dashboard");
-  revalidatePath("/dashboard/bookings");
+  revalidatePath("/dashboard"); revalidatePath("/dashboard/bookings");
 }
