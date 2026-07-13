@@ -27,10 +27,7 @@ async function revalidateBusiness(salonId: string) {
 
 export async function createServiceAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({
-    name: z.string().min(2), description: z.string().optional(), categoryId: optionalUuid,
-    durationMinutes: z.coerce.number().int().min(5).max(600), price: z.coerce.number().min(0), deposit: z.coerce.number().min(0),
-  }).parse(Object.fromEntries(formData));
+  const input = z.object({ name: z.string().min(2), description: z.string().optional(), categoryId: optionalUuid, durationMinutes: z.coerce.number().int().min(5).max(600), price: z.coerce.number().min(0), deposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
   await db.insert(services).values({ salonId: session.salonId, categoryId: input.categoryId || null, name: input.name, description: input.description, durationMinutes: input.durationMinutes, priceCents: Math.round(input.price * 100), depositCents: Math.round(input.deposit * 100) });
   await revalidateBusiness(session.salonId);
 }
@@ -45,10 +42,7 @@ export async function createServiceCategoryAction(formData: FormData) {
 
 export async function createStaffAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({
-    name: z.string().min(2), title: z.string().trim().max(160).optional(), bio: z.string().trim().max(2000).optional(),
-    email: z.string().email().optional().or(z.literal("")), phone: z.string().optional(), photoUrl: optionalUrl,
-  }).parse(Object.fromEntries(formData));
+  const input = z.object({ name: z.string().min(2), title: z.string().trim().max(160).optional(), bio: z.string().trim().max(2000).optional(), email: z.string().email().optional().or(z.literal("")), phone: z.string().optional(), photoUrl: optionalUrl }).parse(Object.fromEntries(formData));
   await db.insert(staff).values({ salonId: session.salonId, name: input.name, title: input.title || null, bio: input.bio || null, photoUrl: input.photoUrl || null, email: input.email || null, phone: input.phone || null });
   await revalidateBusiness(session.salonId);
 }
@@ -63,24 +57,14 @@ export async function updateStaffProfileAction(formData: FormData) {
 export async function updateSalonAction(formData: FormData) {
   const session = await requireSession();
   const input = z.object({ name: z.string().min(2), phone: z.string().optional(), address: z.string().optional(), county: z.string().optional(), eircode: z.string().optional(), cancellationWindowHours: z.coerce.number().int().min(1).max(168), defaultDeposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
-  await db.update(salons).set({ ...input, defaultDepositCents: Math.round(input.defaultDeposit * 100), updatedAt: new Date() }).where(eq(salons.id, session.salonId));
+  await db.update(salons).set({ name: input.name, phone: input.phone || null, address: input.address || null, county: input.county || null, eircode: input.eircode || null, cancellationWindowHours: input.cancellationWindowHours, defaultDepositCents: Math.round(input.defaultDeposit * 100), updatedAt: new Date() }).where(eq(salons.id, session.salonId));
   await revalidateBusiness(session.salonId);
 }
 
 export async function updateStorefrontAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({
-    businessCategory: z.string().trim().min(2).max(80), tagline: z.string().trim().max(180).optional(), description: z.string().trim().max(4000).optional(),
-    logoUrl: optionalUrl, coverImageUrl: optionalUrl, accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), storefrontTheme: z.enum(["modern", "minimal", "warm", "bold"]),
-    instagramUrl: optionalUrl, facebookUrl: optionalUrl, tiktokUrl: optionalUrl, websiteUrl: optionalUrl,
-    seoTitle: z.string().trim().max(180).optional(), seoDescription: z.string().trim().max(320).optional(), storefrontPublished: z.enum(["on"]).optional(),
-  }).parse(Object.fromEntries(formData));
-  await db.update(salons).set({
-    businessCategory: input.businessCategory, tagline: input.tagline || null, description: input.description || null,
-    logoUrl: input.logoUrl || null, coverImageUrl: input.coverImageUrl || null, accentColor: input.accentColor, storefrontTheme: input.storefrontTheme,
-    instagramUrl: input.instagramUrl || null, facebookUrl: input.facebookUrl || null, tiktokUrl: input.tiktokUrl || null, websiteUrl: input.websiteUrl || null,
-    seoTitle: input.seoTitle || null, seoDescription: input.seoDescription || null, storefrontPublished: input.storefrontPublished === "on", updatedAt: new Date(),
-  }).where(eq(salons.id, session.salonId));
+  const input = z.object({ businessCategory: z.string().trim().min(2).max(80), tagline: z.string().trim().max(180).optional(), description: z.string().trim().max(4000).optional(), logoUrl: optionalUrl, coverImageUrl: optionalUrl, accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), storefrontTheme: z.enum(["modern", "minimal", "warm", "bold"]), instagramUrl: optionalUrl, facebookUrl: optionalUrl, tiktokUrl: optionalUrl, websiteUrl: optionalUrl, seoTitle: z.string().trim().max(180).optional(), seoDescription: z.string().trim().max(320).optional(), storefrontPublished: z.enum(["on"]).optional() }).parse(Object.fromEntries(formData));
+  await db.update(salons).set({ businessCategory: input.businessCategory, tagline: input.tagline || null, description: input.description || null, logoUrl: input.logoUrl || null, coverImageUrl: input.coverImageUrl || null, accentColor: input.accentColor, storefrontTheme: input.storefrontTheme, instagramUrl: input.instagramUrl || null, facebookUrl: input.facebookUrl || null, tiktokUrl: input.tiktokUrl || null, websiteUrl: input.websiteUrl || null, seoTitle: input.seoTitle || null, seoDescription: input.seoDescription || null, storefrontPublished: input.storefrontPublished === "on", updatedAt: new Date() }).where(eq(salons.id, session.salonId));
   await revalidateBusiness(session.salonId);
 }
 
@@ -179,6 +163,6 @@ export async function recordOutcomeAction(formData: FormData) {
     if (outcome === "no_show") await tx.update(customers).set({ noShowCount: booking.customer.noShowCount + 1, updatedAt: new Date() }).where(eq(customers.id, booking.customerId));
     await tx.insert(auditLog).values({ salonId: session.salonId, action: `booking.${outcome}`, entityType: "booking", entityId: booking.id });
   });
-  if (booking.customer.email) await sendOutcome({ to: booking.customer.email, salon: booking.salon.name, outcome, depositCents: booking.depositCents });
+  if (booking.customer.email) await sendOutcome({ to: booking.customer.email, salon: booking.salon.name, outcome, depositCents: booking.depositCents, reviewUrl: outcome === "completed" ? `${env.NEXT_PUBLIC_APP_URL}/review/${booking.id}` : undefined });
   revalidatePath("/dashboard"); revalidatePath("/dashboard/bookings");
 }
