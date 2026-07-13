@@ -10,14 +10,15 @@ async function send(to: string | string[], subject: string, html: string) {
 }
 
 export async function sendBookingConfirmation(input: { to: string; salon: string; service: string; startsAt: Date; depositCents: number }) {
-  return send(input.to, `Booking confirmed with ${input.salon}`, `<h1>Your appointment is confirmed</h1><p><strong>${input.service}</strong></p><p>${input.startsAt.toLocaleString("en-IE", { timeZone: "Europe/Dublin" })}</p><p>Deposit paid: ${euro(input.depositCents)}</p><p>Please contact the salon directly if you need to change your appointment.</p>`);
+  return send(input.to, `Booking confirmed with ${input.salon}`, `<h1>Your appointment is confirmed</h1><p><strong>${input.service}</strong></p><p>${input.startsAt.toLocaleString("en-IE", { timeZone: "Europe/Dublin" })}</p><p>Deposit paid: ${euro(input.depositCents)}</p><p>Please contact the business directly if you need to change your appointment.</p>`);
 }
 
 export async function sendReminder(input: { to: string; salon: string; service: string; startsAt: Date }) {
   return send(input.to, `Reminder: ${input.salon} appointment`, `<h1>Appointment reminder</h1><p>Your ${input.service} appointment is at ${input.startsAt.toLocaleString("en-IE", { timeZone: "Europe/Dublin" })}.</p>`);
 }
 
-export async function sendOutcome(input: { to: string; salon: string; outcome: "completed" | "no_show"; depositCents: number }) {
+export async function sendOutcome(input: { to: string; salon: string; outcome: "completed" | "no_show"; depositCents: number; reviewUrl?: string }) {
   const attended = input.outcome === "completed";
-  return send(input.to, attended ? `Thanks for visiting ${input.salon}` : `No-show deposit retained by ${input.salon}`, `<h1>${attended ? "Thanks for visiting" : "Appointment outcome"}</h1><p>${attended ? "Your appointment was marked complete." : `Your ${euro(input.depositCents)} deposit was retained under the salon cancellation policy.`}</p>`);
+  const review = attended && input.reviewUrl ? `<p><a href="${input.reviewUrl}" style="display:inline-block;padding:12px 18px;background:#111827;color:#fff;text-decoration:none;border-radius:10px">Leave a verified review</a></p><p>Your review helps this independent business get discovered on SureBook.</p>` : "";
+  return send(input.to, attended ? `Thanks for visiting ${input.salon}` : `Appointment update from ${input.salon}`, `<h1>${attended ? "Thanks for visiting" : "Appointment outcome"}</h1><p>${attended ? "Your appointment was marked complete." : `Your ${euro(input.depositCents)} deposit was retained under the business cancellation policy.`}</p>${review}`);
 }
