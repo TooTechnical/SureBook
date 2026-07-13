@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { auditLog, bookings, customers, salons, services, staff } from "@/db/schema";
 import { requireSession } from "@/lib/session";
 import { requireStripe } from "@/lib/stripe";
+import { syncStripeConnectStatus } from "@/lib/stripe-connect";
 import { env } from "@/lib/env";
 import { sendOutcome } from "@/lib/email";
 
@@ -36,15 +37,46 @@ export async function startStripeOnboardingAction() {
   const session = await requireSession();
   const salon = await db.query.salons.findFirst({ where: eq(salons.id, session.salonId) });
   if (!salon) redirect("/login");
+
   const stripe = requireStripe();
   let accountId = salon.stripeAccountId;
+
   if (!accountId) {
-    const account = await stripe.accounts.create({ type: "standard", country: "IE", email: salon.email, business_profile: { name: salon.name, product_description: "Salon appointment deposits" }, metadata: { salonId: salon.id } });
+    const account = await stripe.accounts.create({
+      type: "standard",
+      country: "IE",
+      email: salon.email,
+      business_profile: {
+        name: salon.name,
+        product_description: "Salon appointment deposits",
+      },
+      metadata: { salonId: salon.id },
+    });
+
     accountId = account.id;
-    await db.update(salons).set({ stripeAccountId: accountId }).where(eq(salons.id, salon.id));
+    await db
+      .update(salons)
+      .set({ stripeAccountId: accountId, updatedAt: new Date() })
+      .where(eq(salons.id, salon.id));
+  } else {
+    await syncStripeConnectStatus(salon.id);
   }
-  const link = await stripe.accountLinks.create({ account: accountId, type: "account_onboarding", refresh_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=refresh`, return_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=return` });
+
+  const link = await stripe.accountLinks.create({
+    account: accountId,
+    type: "account_onboarding",
+    refresh_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=refresh`,
+    return_url: `${env.NEXT_PUBLIC_APP_URL}/dashboard/settings?stripe=return`,
+  });
+
   redirect(link.url);
+}
+
+export async function refreshStripeStatusAction() {
+  const session = await requireSession();
+  await syncStripeConnectStatus(session.salonId);
+  revalidatePath("/dashboard/settings");
+  redirect("/dashboard/settings?stripe=checked");
 }
 
 export async function recordOutcomeAction(formData: FormData) {
