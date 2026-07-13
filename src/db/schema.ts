@@ -1,4 +1,5 @@
 import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 export const bookingStatus = pgEnum("booking_status", ["pending_payment", "confirmed", "cancelled", "completed", "no_show"]);
 export const paymentStatus = pgEnum("payment_status", ["not_required", "pending", "paid", "refunded", "partially_refunded", "failed", "disputed"]);
@@ -13,6 +14,19 @@ export const salons = pgTable("salons", {
   address: text("address"),
   county: varchar("county", { length: 80 }),
   timezone: varchar("timezone", { length: 80 }).notNull().default("Europe/Dublin"),
+  businessCategory: varchar("business_category", { length: 80 }).notNull().default("Beauty & wellness"),
+  tagline: varchar("tagline", { length: 180 }),
+  description: text("description"),
+  logoUrl: text("logo_url"),
+  coverImageUrl: text("cover_image_url"),
+  accentColor: varchar("accent_color", { length: 20 }).notNull().default("#111827"),
+  instagramUrl: text("instagram_url"),
+  facebookUrl: text("facebook_url"),
+  tiktokUrl: text("tiktok_url"),
+  websiteUrl: text("website_url"),
+  seoTitle: varchar("seo_title", { length: 180 }),
+  seoDescription: varchar("seo_description", { length: 320 }),
+  storefrontPublished: boolean("storefront_published").notNull().default(true),
   passwordHash: text("password_hash").notNull(),
   stripeAccountId: text("stripe_account_id"),
   stripeChargesEnabled: boolean("stripe_charges_enabled").notNull().default(false),
@@ -22,6 +36,15 @@ export const salons = pgTable("salons", {
   reminderHours: jsonb("reminder_hours").$type<number[]>().notNull().default([24, 2]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const storefrontImages = pgTable("storefront_images", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  salonId: uuid("salon_id").references(() => salons.id, { onDelete: "cascade" }).notNull(),
+  imageUrl: text("image_url").notNull(),
+  altText: varchar("alt_text", { length: 180 }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const staff = pgTable("staff", {
@@ -108,11 +131,14 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-import { relations } from "drizzle-orm";
-
 export const salonsRelations = relations(salons, ({ many }) => ({
-  staff: many(staff), services: many(services), customers: many(customers), bookings: many(bookings),
+  staff: many(staff),
+  services: many(services),
+  customers: many(customers),
+  bookings: many(bookings),
+  storefrontImages: many(storefrontImages),
 }));
+export const storefrontImagesRelations = relations(storefrontImages, ({ one }) => ({ salon: one(salons, { fields: [storefrontImages.salonId], references: [salons.id] }) }));
 export const staffRelations = relations(staff, ({ one, many }) => ({ salon: one(salons, { fields: [staff.salonId], references: [salons.id] }), bookings: many(bookings) }));
 export const servicesRelations = relations(services, ({ one, many }) => ({ salon: one(salons, { fields: [services.salonId], references: [salons.id] }), bookings: many(bookings) }));
 export const customersRelations = relations(customers, ({ one, many }) => ({ salon: one(salons, { fields: [customers.salonId], references: [salons.id] }), bookings: many(bookings) }));
