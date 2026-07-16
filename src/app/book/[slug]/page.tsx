@@ -1,17 +1,20 @@
+import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import QRCode from "qrcode";
 import { and, asc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
+import { BadgeCheck, CalendarCheck, Clock3, CreditCard, MapPin, Phone, ShieldCheck, Star } from "lucide-react";
 import { db } from "@/db";
 import { businessHours, reviews, salons, services, staff, storefrontImages } from "@/db/schema";
 import { BookingCheckout } from "@/components/BookingCheckout";
 import { Logo } from "@/components/Logo";
 import { ShareStorefront } from "@/components/ShareStorefront";
+import { StorefrontGallery } from "@/components/StorefrontGallery";
 import { euro } from "@/lib/utils";
+import { resolveStorefrontTheme } from "@/lib/storefront-themes";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const themeBackground: Record<string, string> = { modern: "#f8fafc", minimal: "#ffffff", warm: "#fffaf3", bold: "#f5f3ff" };
 
 type PageProps = { params: Promise<{ slug: string }>; searchParams: Promise<{ confirmed?: string }> };
 
@@ -40,6 +43,8 @@ export default async function Page({ params, searchParams }: PageProps) {
     db.query.reviews.findMany({ where: and(eq(reviews.salonId, salon.id), eq(reviews.approved, true)), with: { customer: true }, orderBy: [asc(reviews.createdAt)] }),
   ]);
 
+  const theme = resolveStorefrontTheme(salon.storefrontTheme);
+  const accent = salon.accentColor === "#111827" ? theme.accent : salon.accentColor;
   const storefrontUrl = `${appUrl}/book/${salon.slug}`;
   const qrDataUrl = await QRCode.toDataURL(storefrontUrl, { width: 720, margin: 2 });
   const averageRating = reviewRows.length ? reviewRows.reduce((sum, review) => sum + review.rating, 0) / reviewRows.length : null;
@@ -49,6 +54,23 @@ export default async function Page({ params, searchParams }: PageProps) {
     categories.set(key, [...(categories.get(key) || []), service]);
   }
   const mapQuery = encodeURIComponent([salon.address, salon.county, salon.eircode, "Ireland"].filter(Boolean).join(", "));
+  const todayName = new Intl.DateTimeFormat("en-IE", { weekday: "long", timeZone: salon.timezone }).format(new Date());
+  const todayIndex = dayNames.indexOf(todayName);
+  const todayHours = hours.find((row) => row.dayOfWeek === todayIndex);
+  const openToday = Boolean(todayHours && !todayHours.closed && todayHours.openTime && todayHours.closeTime);
+  const fullyVerified = salon.stripeChargesEnabled && salon.stripePayoutsEnabled;
+  const instantBooking = svc.length > 0 && team.length > 0 && salon.stripeChargesEnabled;
+  const topRated = Boolean(averageRating && averageRating >= 4.7 && reviewRows.length >= 3);
+
+  const badges = [
+    fullyVerified ? { label: "Verified business", icon: BadgeCheck } : null,
+    fullyVerified ? { label: "Stripe verified", icon: CreditCard } : null,
+    openToday ? { label: `Open today ${todayHours?.openTime}–${todayHours?.closeTime}`, icon: Clock3 } : null,
+    topRated ? { label: "Top rated", icon: Star } : null,
+    instantBooking ? { label: "Instant booking", icon: CalendarCheck } : null,
+  ].filter(Boolean) as { label: string; icon: typeof BadgeCheck }[];
+
+  const cardStyle: CSSProperties = { background: theme.surface, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: theme.radius, boxShadow: theme.name === "modern" ? "0 18px 55px rgba(15,23,42,.08)" : "none" };
   const jsonLd = {
     "@context": "https://schema.org", "@type": "LocalBusiness", name: salon.name,
     description: salon.description || salon.tagline || undefined,
@@ -62,44 +84,48 @@ export default async function Page({ params, searchParams }: PageProps) {
   };
 
   return (
-    <main style={{ minHeight: "100vh", background: themeBackground[salon.storefrontTheme] || themeBackground.modern }}>
+    <main style={{ minHeight: "100vh", background: theme.pageBackground, color: theme.text, fontFamily: theme.bodyFont }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <div className="container" style={{ padding: "22px 0 70px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}><Logo /><a href="/discover" className="badge">Discover on SureBook</a></div>
+      <div className="container" style={{ padding: "22px 0 78px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}><Logo /><a href="/discover" style={{ color: theme.text, border: `1px solid ${theme.border}`, borderRadius: 999, padding: "9px 14px", textDecoration: "none", fontWeight: 700 }}>Discover on SureBook</a></div>
 
         {q.confirmed ? (
-          <section className="card" style={{ maxWidth: 720, margin: "60px auto", padding: 38, textAlign: "center" }}><h1>Booking received</h1><p>Your payment is being confirmed. You will receive an email as soon as SureBook receives final confirmation from Stripe.</p></section>
+          <section style={{ ...cardStyle, maxWidth: 720, margin: "60px auto", padding: 38, textAlign: "center" }}><ShieldCheck size={40} color={accent} /><h1>Booking received</h1><p style={{ color: theme.muted }}>Your payment is being confirmed. You will receive an email as soon as SureBook receives final confirmation from Stripe.</p></section>
         ) : (
           <>
-            <section className="card" style={{ overflow: "hidden", marginTop: 24 }}>
-              <div style={{ minHeight: salon.storefrontTheme === "minimal" ? 220 : 300, background: salon.coverImageUrl ? `linear-gradient(90deg,rgba(15,23,42,.72),rgba(15,23,42,.25)),url(${salon.coverImageUrl}) center/cover` : `linear-gradient(135deg,${salon.accentColor},#334155)`, padding: "48px clamp(24px,5vw,70px)", display: "flex", alignItems: "end" }}>
-                <div style={{ color: "white", maxWidth: 760 }}>
-                  {salon.logoUrl && <img src={salon.logoUrl} alt={`${salon.name} logo`} style={{ width: 96, height: 96, objectFit: "cover", borderRadius: salon.storefrontTheme === "bold" ? 12 : 24, background: "white", padding: 6, marginBottom: 18 }} />}
-                  <span style={{ display: "inline-block", background: "rgba(255,255,255,.16)", padding: "7px 11px", borderRadius: 999, fontSize: 13 }}>{salon.businessCategory}</span>
-                  <h1 style={{ fontSize: "clamp(38px,7vw,68px)", lineHeight: 1, letterSpacing: "-.05em", margin: "16px 0 12px" }}>{salon.name}</h1>
-                  {salon.tagline && <p style={{ fontSize: 21, margin: 0, maxWidth: 650 }}>{salon.tagline}</p>}
-                  {averageRating && <p style={{ marginTop: 14 }}>★ {averageRating.toFixed(1)} · {reviewRows.length} verified review{reviewRows.length === 1 ? "" : "s"}</p>}
+            <section style={{ ...cardStyle, overflow: "hidden", marginTop: 24 }}>
+              <div style={{ minHeight: 520, background: salon.coverImageUrl ? `${theme.heroOverlay},url(${salon.coverImageUrl}) center/cover` : `linear-gradient(135deg,${accent},${theme.pageBackground})`, padding: "clamp(34px,7vw,76px)", display: "flex", alignItems: "end" }}>
+                <div style={{ color: "white", maxWidth: 850 }}>
+                  {salon.logoUrl && <img src={salon.logoUrl} alt={`${salon.name} logo`} style={{ width: 110, height: 110, objectFit: "cover", borderRadius: Math.max(8, theme.radius), background: "white", padding: 7, marginBottom: 22, boxShadow: "0 18px 55px rgba(0,0,0,.3)" }} />}
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}><span style={{ display: "inline-block", background: "rgba(255,255,255,.16)", backdropFilter: "blur(10px)", padding: "8px 13px", borderRadius: 999, fontSize: 13, fontWeight: 800 }}>{salon.businessCategory}{salon.county ? ` · ${salon.county}` : ""}</span>{averageRating && <span style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "rgba(255,255,255,.96)", color: "#111", padding: "8px 13px", borderRadius: 999, fontWeight: 800 }}><Star size={16} fill="#f59e0b" color="#f59e0b" /> {averageRating.toFixed(1)} <small>({reviewRows.length})</small></span>}</div>
+                  <h1 style={{ fontFamily: theme.headingFont, fontSize: "clamp(48px,9vw,92px)", lineHeight: .93, letterSpacing: theme.name === "barber" ? ".01em" : "-.055em", textTransform: theme.name === "barber" ? "uppercase" : undefined, margin: "22px 0 16px", maxWidth: 920 }}>{salon.name}</h1>
+                  {salon.tagline && <p style={{ fontSize: "clamp(19px,3vw,26px)", lineHeight: 1.45, margin: 0, maxWidth: 720, color: "rgba(255,255,255,.9)" }}>“{salon.tagline}”</p>}
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 30 }}>
+                    <a href="#book" style={{ background: accent, color: theme.accentText, padding: "14px 22px", borderRadius: Math.max(4, theme.radius / 2), textDecoration: "none", fontWeight: 900, display: "inline-flex", alignItems: "center", gap: 9 }}><CalendarCheck size={19} /> Book now</a>
+                    {salon.phone && <a href={`tel:${salon.phone}`} style={{ background: "rgba(255,255,255,.95)", color: "#111", padding: "14px 20px", borderRadius: Math.max(4, theme.radius / 2), textDecoration: "none", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: 9 }}><Phone size={18} /> Call</a>}
+                    {salon.address && <a href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer" style={{ background: "rgba(255,255,255,.15)", color: "white", border: "1px solid rgba(255,255,255,.35)", padding: "14px 20px", borderRadius: Math.max(4, theme.radius / 2), textDecoration: "none", fontWeight: 850, display: "inline-flex", alignItems: "center", gap: 9, backdropFilter: "blur(10px)" }}><MapPin size={18} /> Directions</a>}
+                  </div>
                 </div>
               </div>
-              <div style={{ padding: "20px clamp(22px,5vw,60px)", display: "flex", justifyContent: "space-between", gap: 18, flexWrap: "wrap", alignItems: "center" }}>
-                <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>{salon.county && <span>📍 {salon.county}</span>}{salon.phone && <a href={`tel:${salon.phone}`}>☎ {salon.phone}</a>}{salon.instagramUrl && <a href={salon.instagramUrl} target="_blank" rel="noreferrer">Instagram</a>}{salon.facebookUrl && <a href={salon.facebookUrl} target="_blank" rel="noreferrer">Facebook</a>}{salon.tiktokUrl && <a href={salon.tiktokUrl} target="_blank" rel="noreferrer">TikTok</a>}</div>
+              <div style={{ padding: "20px clamp(22px,5vw,60px)", display: "flex", justifyContent: "space-between", gap: 18, flexWrap: "wrap", alignItems: "center", background: theme.surface }}>
+                <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>{badges.map(({ label, icon: Icon }) => <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 7, color: theme.text, border: `1px solid ${theme.border}`, background: theme.pageBackground, borderRadius: 999, padding: "8px 12px", fontSize: 13, fontWeight: 750 }}><Icon size={16} color={accent} />{label}</span>)}</div>
                 <ShareStorefront url={storefrontUrl} name={salon.name} qrDataUrl={qrDataUrl} />
               </div>
             </section>
 
-            {salon.description && <section style={{ maxWidth: 900, margin: "42px auto" }}><span className="badge">About</span><h2 style={{ fontSize: 34 }}>Welcome to {salon.name}</h2><p style={{ whiteSpace: "pre-line", color: "var(--muted)", fontSize: 18, lineHeight: 1.75 }}>{salon.description}</p></section>}
+            {salon.description && <section style={{ maxWidth: 900, margin: "58px auto" }}><span style={{ color: accent, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>About</span><h2 style={{ fontFamily: theme.headingFont, color: theme.text, fontSize: "clamp(34px,5vw,52px)", margin: "10px 0 18px" }}>Welcome to {salon.name}</h2><p style={{ whiteSpace: "pre-line", color: theme.muted, fontSize: 19, lineHeight: 1.8 }}>{salon.description}</p></section>}
 
-            {gallery.length > 0 && <section style={{ margin: "42px 0" }}><span className="badge">Gallery</span><h2 style={{ fontSize: 34 }}>See our work</h2><div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 }}>{gallery.map((image, index) => <img key={image.id} src={image.imageUrl} alt={image.altText || `${salon.name} gallery image ${index + 1}`} style={{ width: "100%", height: index === 0 ? 330 : 230, objectFit: "cover", borderRadius: salon.storefrontTheme === "bold" ? 10 : 20, gridColumn: index === 0 && gallery.length > 2 ? "span 2" : undefined }} />)}</div></section>}
+            <StorefrontGallery items={gallery} businessName={salon.name} radius={theme.radius} accent={accent} text={theme.text} muted={theme.muted} />
 
-            <section style={{ margin: "50px 0" }}><span className="badge">Services</span><h2 style={{ fontSize: 38 }}>Choose what you need</h2>{svc.length === 0 ? <p style={{ color: "var(--muted)" }}>Services are being added.</p> : [...categories.entries()].map(([category, items]) => <div key={category} style={{ marginBottom: 32 }}><h3 style={{ fontSize: 25 }}>{category}</h3><div className="grid-auto">{items.map((service) => <article key={service.id} className="card" style={{ padding: 22, borderTop: `4px solid ${salon.accentColor}` }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><h3 style={{ marginTop: 0 }}>{service.name}</h3><strong>{euro(service.priceCents)}</strong></div>{service.description && <p style={{ color: "var(--muted)" }}>{service.description}</p>}<small>{service.durationMinutes} minutes · {service.depositCents > 0 ? `${euro(service.depositCents)} deposit` : "No deposit"}</small></article>)}</div></div>)}</section>
+            <section style={{ margin: "58px 0" }}><span style={{ color: accent, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>Services</span><h2 style={{ fontFamily: theme.headingFont, color: theme.text, fontSize: "clamp(38px,6vw,58px)", margin: "10px 0 30px" }}>Choose what you need</h2>{svc.length === 0 ? <p style={{ color: theme.muted }}>Services are being added.</p> : [...categories.entries()].map(([category, items]) => <div key={category} style={{ marginBottom: 36 }}><h3 style={{ color: theme.text, fontSize: 25 }}>{category}</h3><div className="grid-auto">{items.map((service) => <article key={service.id} style={{ ...cardStyle, padding: 24, borderTop: `4px solid ${accent}` }}><div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}><h3 style={{ marginTop: 0, color: theme.text }}>{service.name}</h3><strong style={{ color: accent }}>{euro(service.priceCents)}</strong></div>{service.description && <p style={{ color: theme.muted }}>{service.description}</p>}<small style={{ color: theme.muted }}>{service.durationMinutes} minutes · {service.depositCents > 0 ? `${euro(service.depositCents)} deposit` : "No deposit"}</small></article>)}</div></div>)}</section>
 
-            {team.length > 0 && <section style={{ margin: "50px 0" }}><span className="badge">Team</span><h2 style={{ fontSize: 38 }}>Meet the people behind the business</h2><div className="grid-auto">{team.map((member) => <article key={member.id} className="card" style={{ padding: 22 }}>{member.photoUrl ? <img src={member.photoUrl} alt={member.name} style={{ width: 86, height: 86, objectFit: "cover", borderRadius: "50%" }} /> : <div style={{ width: 72, height: 72, borderRadius: "50%", display: "grid", placeItems: "center", background: salon.accentColor, color: "white", fontSize: 26, fontWeight: 700 }}>{member.name.charAt(0).toUpperCase()}</div>}<h3>{member.name}</h3>{member.title && <strong>{member.title}</strong>}{member.bio && <p style={{ color: "var(--muted)", lineHeight: 1.65 }}>{member.bio}</p>}</article>)}</div></section>}
+            {team.length > 0 && <section style={{ margin: "58px 0" }}><span style={{ color: accent, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>Team</span><h2 style={{ fontFamily: theme.headingFont, color: theme.text, fontSize: "clamp(38px,6vw,58px)", margin: "10px 0 30px" }}>Meet the people behind the business</h2><div className="grid-auto">{team.map((member) => <article key={member.id} style={{ ...cardStyle, padding: 24 }}>{member.photoUrl ? <img src={member.photoUrl} alt={member.name} style={{ width: 94, height: 94, objectFit: "cover", borderRadius: theme.name === "barber" ? 4 : "50%" }} /> : <div style={{ width: 82, height: 82, borderRadius: theme.name === "barber" ? 4 : "50%", display: "grid", placeItems: "center", background: accent, color: theme.accentText, fontSize: 28, fontWeight: 800 }}>{member.name.charAt(0).toUpperCase()}</div>}<h3 style={{ color: theme.text }}>{member.name}</h3>{member.title && <strong style={{ color: accent }}>{member.title}</strong>}{member.bio && <p style={{ color: theme.muted, lineHeight: 1.7 }}>{member.bio}</p>}</article>)}</div></section>}
 
-            <section id="book" className="card" style={{ padding: "clamp(22px,5vw,44px)", maxWidth: 900, margin: "50px auto", borderTop: `6px solid ${salon.accentColor}` }}><span className="badge">Secure online booking</span><h2 style={{ fontSize: 40, marginBottom: 8 }}>Book with {salon.name}</h2><p style={{ color: "var(--muted)", fontSize: 18 }}>Choose a service, preferred team member and appointment time. A deposit may be required to secure the slot.</p><BookingCheckout slug={slug} services={svc} staff={team} /></section>
+            <section id="book" style={{ ...cardStyle, padding: "clamp(24px,5vw,48px)", maxWidth: 920, margin: "58px auto", borderTop: `7px solid ${accent}` }}><span style={{ color: accent, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>Secure online booking</span><h2 style={{ fontFamily: theme.headingFont, color: theme.text, fontSize: "clamp(38px,6vw,58px)", marginBottom: 8 }}>Book with {salon.name}</h2><p style={{ color: theme.muted, fontSize: 18 }}>Choose a service, preferred team member and appointment time. A deposit may be required to secure the slot.</p><BookingCheckout slug={slug} services={svc} staff={team} /></section>
 
-            {reviewRows.length > 0 && <section style={{ margin: "50px 0" }}><span className="badge">Verified reviews</span><h2 style={{ fontSize: 38 }}>What customers say</h2><div className="grid-auto">{reviewRows.slice(-9).reverse().map((review) => <article className="card" style={{ padding: 22 }} key={review.id}><strong>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</strong>{review.comment && <p style={{ lineHeight: 1.65 }}>{review.comment}</p>}<small>{review.customer.name} · Verified booking</small></article>)}</div></section>}
+            {reviewRows.length > 0 && <section style={{ margin: "58px 0" }}><span style={{ color: accent, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", fontSize: 12 }}>Verified reviews</span><h2 style={{ fontFamily: theme.headingFont, color: theme.text, fontSize: "clamp(38px,6vw,58px)", margin: "10px 0 30px" }}>What customers say</h2><div className="grid-auto">{reviewRows.slice(-9).reverse().map((review) => <article style={{ ...cardStyle, padding: 24 }} key={review.id}><strong style={{ color: "#f59e0b", letterSpacing: 2 }}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</strong>{review.comment && <p style={{ color: theme.text, lineHeight: 1.7 }}>{review.comment}</p>}<small style={{ color: theme.muted }}>{review.customer.name} · Verified booking</small></article>)}</div></section>}
 
-            {(salon.address || hours.length > 0) && <section className="card" style={{ padding: 26, maxWidth: 980, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 28 }}><div><h2>Visit and directions</h2>{salon.address && <p style={{ whiteSpace: "pre-line" }}>{salon.address}{salon.county ? `\n${salon.county}` : ""}{salon.eircode ? `\n${salon.eircode}` : ""}</p>}{salon.address && <a className="btn btn-secondary" href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">Open directions</a>}</div><div><h2>Opening hours</h2>{dayNames.map((day, index) => { const h = hours.find((row) => row.dayOfWeek === index); return <div key={day} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: "1px solid var(--border)" }}><span>{day}</span><span>{!h || h.closed ? "Closed" : `${h.openTime}–${h.closeTime}`}</span></div>; })}</div></section>}
+            {(salon.address || hours.length > 0) && <section style={{ ...cardStyle, padding: 28, maxWidth: 1020, margin: "0 auto", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 32 }}><div><h2 style={{ color: theme.text }}>Visit and directions</h2>{salon.address && <p style={{ whiteSpace: "pre-line", color: theme.muted }}>{salon.address}{salon.county ? `\n${salon.county}` : ""}{salon.eircode ? `\n${salon.eircode}` : ""}</p>}{salon.address && <a href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: accent, color: theme.accentText, padding: "12px 17px", borderRadius: Math.max(4, theme.radius / 2), textDecoration: "none", fontWeight: 800 }}><MapPin size={18} /> Open directions</a>}</div><div><h2 style={{ color: theme.text }}>Opening hours</h2>{dayNames.map((day, index) => { const h = hours.find((row) => row.dayOfWeek === index); return <div key={day} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", color: day === todayName ? accent : theme.text, borderBottom: `1px solid ${theme.border}`, fontWeight: day === todayName ? 800 : 500 }}><span>{day}</span><span>{!h || h.closed ? "Closed" : `${h.openTime}–${h.closeTime}`}</span></div>; })}</div></section>}
           </>
         )}
       </div>
