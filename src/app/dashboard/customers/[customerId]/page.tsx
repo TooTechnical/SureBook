@@ -3,7 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { updateCustomerProfileAction } from "@/actions/customer";
 import { db } from "@/db";
-import { auditLog, customers, services, staff } from "@/db/schema";
+import { auditLog, bookings, customers, services, staff } from "@/db/schema";
 import { requireSession } from "@/lib/session";
 import { euro } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ export default async function Page({ params }: PageProps) {
   const [customer, team, serviceRows, auditRows] = await Promise.all([
     db.query.customers.findFirst({
       where: and(eq(customers.id, customerId), eq(customers.salonId, session.salonId)),
-      with: { bookings: { with: { service: true, staff: true }, orderBy: [desc((await import("@/db/schema")).bookings.startsAt)] }, reviews: true, preferredService: true, preferredStaff: true },
+      with: { bookings: { with: { service: true, staff: true }, orderBy: [desc(bookings.startsAt)] }, reviews: true, preferredService: true, preferredStaff: true },
     }),
     db.query.staff.findMany({ where: eq(staff.salonId, session.salonId) }),
     db.query.services.findMany({ where: eq(services.salonId, session.salonId) }),
