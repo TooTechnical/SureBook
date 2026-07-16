@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { addDays, addYears } from "date-fns";
+import { addYears } from "date-fns";
 import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -12,13 +12,14 @@ import { requireSession } from "@/lib/session";
 
 const optionalDate = z.string().optional().transform((value) => value ? new Date(value) : null);
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
+const optionalPositiveInteger = z.preprocess((value) => value === "" || value == null ? undefined : value, z.coerce.number().int().positive().optional());
 
 export async function createDiscountCodeAction(formData: FormData) {
   const session = await requireSession();
   const input = z.object({
     code: z.string().trim().min(3).max(40).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")),
     description: z.string().trim().max(220).optional(), type: z.enum(["percent", "fixed"]), amount: z.coerce.number().positive(),
-    minimumSpend: z.coerce.number().min(0).default(0), maximumRedemptions: z.coerce.number().int().positive().optional(),
+    minimumSpend: z.coerce.number().min(0).default(0), maximumRedemptions: optionalPositiveInteger,
     startsAt: optionalDate, endsAt: optionalDate,
   }).parse(Object.fromEntries(formData));
   const amount = input.type === "percent" ? Math.round(input.amount) : Math.round(input.amount * 100);
@@ -41,6 +42,7 @@ export async function createReferralCampaignAction(formData: FormData) {
   const input = z.object({ name: z.string().trim().min(3).max(160), advocateReward: z.coerce.number().min(0), friendReward: z.coerce.number().min(0), terms: z.string().trim().max(1500).optional() }).parse(Object.fromEntries(formData));
   await db.insert(referralCampaigns).values({ salonId: session.salonId, name: input.name, advocateRewardCents: Math.round(input.advocateReward * 100), friendRewardCents: Math.round(input.friendReward * 100), terms: input.terms || null });
   revalidatePath("/dashboard/marketing");
+  revalidatePath("/dashboard/marketing/referrals");
 }
 
 export async function createGiftVoucherAction(formData: FormData) {
