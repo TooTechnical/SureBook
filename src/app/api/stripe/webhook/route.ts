@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { db } from "@/db";
-import { giftVouchers, membershipSubscriptions, packagePurchases } from "@/db/marketing-schema";
+import { giftVouchers, membershipSubscriptions, packagePurchases, referrals } from "@/db/marketing-schema";
 import { bookings, salons } from "@/db/schema";
 import { env } from "@/lib/env";
 import { requireStripe } from "@/lib/stripe";
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
       const booking = bookingId ? await db.query.bookings.findFirst({ where: eq(bookings.id, bookingId), with: { customer: true, service: true, salon: true } }) : null;
       if (booking && booking.status === "pending_payment") {
         await db.update(bookings).set({ status: "confirmed", paymentStatus: "paid", stripeChargeId: typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : null, updatedAt: new Date() }).where(eq(bookings.id, booking.id));
+        if (paymentIntent.metadata.referralId) await db.update(referrals).set({ status: "converted", convertedAt: new Date() }).where(eq(referrals.id, paymentIntent.metadata.referralId));
         if (booking.customer.email) await sendBookingConfirmation({ to: booking.customer.email, salon: booking.salon.name, service: booking.service.name, startsAt: booking.startsAt, depositCents: booking.depositCents });
       }
     }
@@ -48,8 +49,8 @@ export async function POST(request: Request) {
     }
 
     if (event.type === "invoice.paid") {
-      const invoice = event.data.object;
-      const subscriptionId = typeof invoice.parent?.subscription_details?.subscription === "string" ? invoice.parent.subscription_details.subscription : null;
+      const invoice = event.data.object as unknown as { subscription?: string | null; parent?: { subscription_details?: { subscription?: string | null } } };
+      const subscriptionId = invoice.subscription || invoice.parent?.subscription_details?.subscription || null;
       if (subscriptionId) {
         const record = await db.query.membershipSubscriptions.findFirst({ where: eq(membershipSubscriptions.stripeSubscriptionId, subscriptionId), with: { membership: true } });
         if (record) await db.update(membershipSubscriptions).set({ status: "active", visitsRemaining: record.membership.visitsIncluded, currentPeriodStart: new Date(), currentPeriodEnd: record.membership.billingInterval === "month" ? new Date(Date.now() + 31 * 86_400_000) : null }).where(eq(membershipSubscriptions.id, record.id));
