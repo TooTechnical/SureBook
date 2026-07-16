@@ -23,7 +23,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ voucherId:
   const cream = rgb(0.98, 0.96, 0.91);
   page.drawRectangle({ x: 0, y: 0, width: 842, height: 595, color: dark });
   page.drawRectangle({ x: 24, y: 24, width: 794, height: 547, borderColor: accent, borderWidth: 3, color: rgb(0.055, 0.067, 0.087) });
-  page.drawText("SUREBOOK GIFT VOUCHER", { x: 58, y: 510, size: 15, font: bold, color: accent, characterSpacing: 2 });
+  page.drawText("SUREBOOK GIFT VOUCHER", { x: 58, y: 510, size: 15, font: bold, color: accent });
   page.drawText(salon.name, { x: 58, y: 454, size: 34, font: bold, color: cream });
   page.drawText(`€${(voucher.amountCents / 100).toFixed(2)}`, { x: 58, y: 365, size: 66, font: bold, color: cream });
   page.drawText(`For ${voucher.recipientName || "the recipient"}`, { x: 58, y: 318, size: 20, font: bold, color: accent });
