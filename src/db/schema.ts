@@ -107,8 +107,15 @@ export const customers = pgTable("customers", {
   name: varchar("name", { length: 160 }).notNull(),
   email: varchar("email", { length: 255 }),
   phone: varchar("phone", { length: 40 }).notNull(),
+  birthday: timestamp("birthday", { withTimezone: true }),
   marketingConsent: boolean("marketing_consent").notNull().default(false),
+  smsConsent: boolean("sms_consent").notNull().default(false),
+  whatsappConsent: boolean("whatsapp_consent").notNull().default(false),
   notes: text("notes"),
+  tags: jsonb("tags").$type<string[]>().notNull().default([]),
+  preferredStaffId: uuid("preferred_staff_id").references(() => staff.id, { onDelete: "set null" }),
+  preferredServiceId: uuid("preferred_service_id").references(() => services.id, { onDelete: "set null" }),
+  crmStatus: varchar("crm_status", { length: 40 }).notNull().default("active"),
   noShowCount: integer("no_show_count").notNull().default(0),
   totalBookings: integer("total_bookings").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -167,7 +174,12 @@ export const storefrontImagesRelations = relations(storefrontImages, ({ one }) =
 export const staffRelations = relations(staff, ({ one, many }) => ({ salon: one(salons, { fields: [staff.salonId], references: [salons.id] }), bookings: many(bookings) }));
 export const serviceCategoriesRelations = relations(serviceCategories, ({ one, many }) => ({ salon: one(salons, { fields: [serviceCategories.salonId], references: [salons.id] }), services: many(services) }));
 export const servicesRelations = relations(services, ({ one, many }) => ({ salon: one(salons, { fields: [services.salonId], references: [salons.id] }), category: one(serviceCategories, { fields: [services.categoryId], references: [serviceCategories.id] }), bookings: many(bookings) }));
-export const customersRelations = relations(customers, ({ one, many }) => ({ salon: one(salons, { fields: [customers.salonId], references: [salons.id] }), bookings: many(bookings), reviews: many(reviews) }));
+export const customersRelations = relations(customers, ({ one, many }) => ({
+  salon: one(salons, { fields: [customers.salonId], references: [salons.id] }),
+  preferredStaff: one(staff, { fields: [customers.preferredStaffId], references: [staff.id] }),
+  preferredService: one(services, { fields: [customers.preferredServiceId], references: [services.id] }),
+  bookings: many(bookings), reviews: many(reviews),
+}));
 export const bookingsRelations = relations(bookings, ({ one }) => ({
   salon: one(salons, { fields: [bookings.salonId], references: [salons.id] }), customer: one(customers, { fields: [bookings.customerId], references: [customers.id] }),
   staff: one(staff, { fields: [bookings.staffId], references: [staff.id] }), service: one(services, { fields: [bookings.serviceId], references: [services.id] }), review: one(reviews),
