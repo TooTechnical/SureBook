@@ -44,6 +44,8 @@ export const storefrontImages = pgTable("storefront_images", {
   id: uuid("id").defaultRandom().primaryKey(),
   salonId: uuid("salon_id").references(() => salons.id, { onDelete: "cascade" }).notNull(),
   imageUrl: text("image_url").notNull(),
+  comparisonImageUrl: text("comparison_image_url"),
+  imageType: varchar("image_type", { length: 30 }).notNull().default("gallery"),
   altText: varchar("alt_text", { length: 180 }),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
