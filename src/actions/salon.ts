@@ -25,6 +25,12 @@ async function revalidateBusiness(salonId: string) {
   if (salon) revalidatePath(`/book/${salon.slug}`);
 }
 
+function assertImage(file: FormDataEntryValue | null, label = "image"): asserts file is File {
+  if (!(file instanceof File) || file.size === 0) throw new Error(`Choose a ${label} to upload.`);
+  if (!file.type.startsWith("image/")) throw new Error("Only image files are supported.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Images must be smaller than 5 MB.");
+}
+
 export async function createServiceAction(formData: FormData) {
   const session = await requireSession();
   const input = z.object({ name: z.string().min(2), description: z.string().optional(), categoryId: optionalUuid, durationMinutes: z.coerce.number().int().min(5).max(600), price: z.coerce.number().min(0), deposit: z.coerce.number().min(0) }).parse(Object.fromEntries(formData));
@@ -63,26 +69,37 @@ export async function updateSalonAction(formData: FormData) {
 
 export async function updateStorefrontAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({ businessCategory: z.string().trim().min(2).max(80), tagline: z.string().trim().max(180).optional(), description: z.string().trim().max(4000).optional(), logoUrl: optionalUrl, coverImageUrl: optionalUrl, accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), storefrontTheme: z.enum(["modern", "minimal", "warm", "bold"]), instagramUrl: optionalUrl, facebookUrl: optionalUrl, tiktokUrl: optionalUrl, websiteUrl: optionalUrl, seoTitle: z.string().trim().max(180).optional(), seoDescription: z.string().trim().max(320).optional(), storefrontPublished: z.enum(["on"]).optional() }).parse(Object.fromEntries(formData));
+  const input = z.object({ businessCategory: z.string().trim().min(2).max(80), tagline: z.string().trim().max(180).optional(), description: z.string().trim().max(4000).optional(), logoUrl: optionalUrl, coverImageUrl: optionalUrl, accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/), storefrontTheme: z.enum(["modern", "luxury", "wellness", "barber"]), instagramUrl: optionalUrl, facebookUrl: optionalUrl, tiktokUrl: optionalUrl, websiteUrl: optionalUrl, seoTitle: z.string().trim().max(180).optional(), seoDescription: z.string().trim().max(320).optional(), storefrontPublished: z.enum(["on"]).optional() }).parse(Object.fromEntries(formData));
   await db.update(salons).set({ businessCategory: input.businessCategory, tagline: input.tagline || null, description: input.description || null, logoUrl: input.logoUrl || null, coverImageUrl: input.coverImageUrl || null, accentColor: input.accentColor, storefrontTheme: input.storefrontTheme, instagramUrl: input.instagramUrl || null, facebookUrl: input.facebookUrl || null, tiktokUrl: input.tiktokUrl || null, websiteUrl: input.websiteUrl || null, seoTitle: input.seoTitle || null, seoDescription: input.seoDescription || null, storefrontPublished: input.storefrontPublished === "on", updatedAt: new Date() }).where(eq(salons.id, session.salonId));
   await revalidateBusiness(session.salonId);
 }
 
 export async function uploadStorefrontMediaAction(formData: FormData) {
   const session = await requireSession();
-  const target = z.enum(["logo", "cover", "gallery", "staff"]).parse(formData.get("target"));
+  const target = z.enum(["logo", "cover", "gallery", "before_after", "staff"]).parse(formData.get("target"));
+  const existing = await db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) });
+  if ((target === "gallery" || target === "before_after") && existing.length >= 12) throw new Error("A storefront can have up to 12 gallery items.");
+
+  if (target === "before_after") {
+    const beforeFile = formData.get("beforeFile");
+    const afterFile = formData.get("afterFile");
+    assertImage(beforeFile, "before image");
+    assertImage(afterFile, "after image");
+    const [beforeBlob, afterBlob] = await Promise.all([
+      put(`surebook/${session.salonId}/before-${beforeFile.name}`, beforeFile, { access: "public", addRandomSuffix: true }),
+      put(`surebook/${session.salonId}/after-${afterFile.name}`, afterFile, { access: "public", addRandomSuffix: true }),
+    ]);
+    await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: beforeBlob.url, comparisonImageUrl: afterBlob.url, imageType: "before_after", altText: String(formData.get("altText") || "Before and after result") || null, sortOrder: existing.length });
+    await revalidateBusiness(session.salonId);
+    return;
+  }
+
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) throw new Error("Choose an image to upload.");
-  if (!file.type.startsWith("image/")) throw new Error("Only image files are supported.");
-  if (file.size > 5 * 1024 * 1024) throw new Error("Images must be smaller than 5 MB.");
+  assertImage(file);
   const blob = await put(`surebook/${session.salonId}/${target}-${file.name}`, file, { access: "public", addRandomSuffix: true });
   if (target === "logo") await db.update(salons).set({ logoUrl: blob.url, updatedAt: new Date() }).where(eq(salons.id, session.salonId));
   if (target === "cover") await db.update(salons).set({ coverImageUrl: blob.url, updatedAt: new Date() }).where(eq(salons.id, session.salonId));
-  if (target === "gallery") {
-    const existing = await db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) });
-    if (existing.length >= 12) throw new Error("A storefront can have up to 12 gallery images.");
-    await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: blob.url, altText: String(formData.get("altText") || "") || null, sortOrder: existing.length });
-  }
+  if (target === "gallery") await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: blob.url, imageType: "gallery", altText: String(formData.get("altText") || "") || null, sortOrder: existing.length });
   if (target === "staff") {
     const staffId = z.string().uuid().parse(formData.get("staffId"));
     await db.update(staff).set({ photoUrl: blob.url }).where(and(eq(staff.id, staffId), eq(staff.salonId, session.salonId)));
@@ -95,7 +112,7 @@ export async function addStorefrontImageAction(formData: FormData) {
   const input = z.object({ imageUrl: z.string().trim().url(), altText: z.string().trim().max(180).optional() }).parse(Object.fromEntries(formData));
   const existing = await db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) });
   if (existing.length >= 12) throw new Error("A storefront can have up to 12 gallery images.");
-  await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: input.imageUrl, altText: input.altText || null, sortOrder: existing.length });
+  await db.insert(storefrontImages).values({ salonId: session.salonId, imageUrl: input.imageUrl, imageType: "gallery", altText: input.altText || null, sortOrder: existing.length });
   await revalidateBusiness(session.salonId);
 }
 
