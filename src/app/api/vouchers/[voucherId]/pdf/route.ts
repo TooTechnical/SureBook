@@ -43,5 +43,5 @@ export async function GET(_: Request, { params }: { params: Promise<{ voucherId:
   page.drawText("Scan to verify", { x: 647, y: 152, size: 11, font: regular, color: rgb(0.78, 0.8, 0.84) });
 
   const bytes = await pdf.save();
-  return new Response(bytes, { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${voucher.code}.pdf"`, "Cache-Control": "private, no-store" } });
+  return new Response(Buffer.from(bytes), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="${voucher.code}.pdf"`, "Cache-Control": "private, no-store" } });
 }
