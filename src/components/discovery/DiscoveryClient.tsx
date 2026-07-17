@@ -9,6 +9,13 @@ import type { MarketplaceBusiness } from "@/lib/discovery";
 
 type Props = { initialBusinesses: MarketplaceBusiness[]; mapboxToken: string };
 type Coordinates = { latitude: number; longitude: number };
+type PointGeometry = { type: "Point"; coordinates: [number, number] };
+type BusinessFeature = {
+  type: "Feature";
+  geometry: PointGeometry;
+  properties: { id: string; slug: string; name: string; price: number; rating: number };
+};
+type BusinessFeatureCollection = { type: "FeatureCollection"; features: BusinessFeature[] };
 
 const capabilityFilters = [
   ["femaleTherapist", "Female therapist"],
@@ -84,13 +91,16 @@ export function DiscoveryClient({ initialBusinesses, mapboxToken }: Props) {
       map.addLayer({ id: "cluster-count", type: "symbol", source: "businesses", filter: ["has", "point_count"], layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 13 }, paint: { "text-color": "#ffffff" } });
       map.addLayer({ id: "business-points", type: "circle", source: "businesses", filter: ["!", ["has", "point_count"]], paint: { "circle-color": "#ffffff", "circle-radius": 16, "circle-stroke-color": "#1f6b4f", "circle-stroke-width": 5 } });
       map.addLayer({ id: "business-price", type: "symbol", source: "businesses", filter: ["!", ["has", "point_count"]], layout: { "text-field": ["concat", "€", ["to-string", ["get", "price"]]], "text-size": 11 }, paint: { "text-color": "#17211b" } });
-      map.on("click", "clusters", async (event) => {
+      map.on("click", "clusters", (event) => {
         const feature = map.queryRenderedFeatures(event.point, { layers: ["clusters"] })[0];
+        if (!feature || feature.geometry.type !== "Point") return;
         const clusterId = Number(feature.properties?.cluster_id);
         const source = map.getSource("businesses") as GeoJSONSource;
-        const zoom = await source.getClusterExpansionZoom(clusterId);
-        const point = (feature.geometry as GeoJSON.Point).coordinates as [number, number];
-        map.easeTo({ center: point, zoom });
+        const point = feature.geometry.coordinates as [number, number];
+        source.getClusterExpansionZoom(clusterId, (error, zoom) => {
+          if (error || zoom == null) return;
+          map.easeTo({ center: point, zoom });
+        });
       });
       map.on("click", "business-points", (event) => {
         const slug = event.features?.[0]?.properties?.slug;
@@ -164,12 +174,12 @@ export function DiscoveryClient({ initialBusinesses, mapboxToken }: Props) {
   </main>;
 }
 
-function businessGeoJson(businesses: MarketplaceBusiness[]): GeoJSON.FeatureCollection<GeoJSON.Point> {
+function businessGeoJson(businesses: MarketplaceBusiness[]): BusinessFeatureCollection {
   return {
     type: "FeatureCollection",
     features: businesses.flatMap((business) => business.latitude == null || business.longitude == null ? [] : [{
       type: "Feature" as const,
-      geometry: { type: "Point" as const, coordinates: [business.longitude, business.latitude] },
+      geometry: { type: "Point" as const, coordinates: [business.longitude, business.latitude] as [number, number] },
       properties: { id: business.id, slug: business.slug, name: business.name, price: Math.round(business.minPriceCents / 100), rating: business.rating },
     }]),
   };
