@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { updateCustomerProfileAction } from "@/actions/customer";
 import { db } from "@/db";
@@ -12,7 +12,7 @@ type PageProps = { params: Promise<{ customerId: string }> };
 export default async function Page({ params }: PageProps) {
   const session = await requireSession();
   const { customerId } = await params;
-  const [customer, team, serviceRows, auditRows] = await Promise.all([
+  const [customer, team, serviceRows, auditRows, clockRows] = await Promise.all([
     db.query.customers.findFirst({
       where: and(eq(customers.id, customerId), eq(customers.salonId, session.salonId)),
       with: { bookings: { with: { service: true, staff: true }, orderBy: [desc(bookings.startsAt)] }, reviews: true, preferredService: true, preferredStaff: true },
@@ -20,9 +20,11 @@ export default async function Page({ params }: PageProps) {
     db.query.staff.findMany({ where: eq(staff.salonId, session.salonId) }),
     db.query.services.findMany({ where: eq(services.salonId, session.salonId) }),
     db.query.auditLog.findMany({ where: and(eq(auditLog.salonId, session.salonId), eq(auditLog.entityId, customerId)), orderBy: [desc(auditLog.createdAt)], limit: 25 }),
+    db.execute(sql<{ currentTime: Date }>`select now() as "currentTime"`),
   ]);
   if (!customer) notFound();
 
+  const currentTime = clockRows[0]?.currentTime ?? customer.updatedAt;
   const completed = customer.bookings.filter((booking) => booking.status === "completed").sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const lifetimeValue = completed.reduce((sum, booking) => sum + booking.service.priceCents, 0);
   const averageBooking = completed.length ? Math.round(lifetimeValue / completed.length) : 0;
@@ -38,7 +40,7 @@ export default async function Page({ params }: PageProps) {
   const favouriteStaff = customer.preferredStaff?.name || [...staffCounts.values()].sort((a, b) => b.count - a.count)[0]?.name || "Not enough history";
   const intervals = completed.slice(0, -1).map((booking, index) => Math.round((booking.startsAt.getTime() - completed[index + 1].startsAt.getTime()) / 86_400_000)).filter((days) => days > 0);
   const normalCycleDays = intervals.length ? Math.round(intervals.reduce((sum, days) => sum + days, 0) / intervals.length) : null;
-  const daysSinceVisit = completed[0] ? Math.floor((Date.now() - completed[0].startsAt.getTime()) / 86_400_000) : null;
+  const daysSinceVisit = completed[0] ? Math.floor((currentTime.getTime() - completed[0].startsAt.getTime()) / 86_400_000) : null;
   const dueToRebook = Boolean(normalCycleDays && daysSinceVisit && daysSinceVisit > normalCycleDays);
 
   return <>
