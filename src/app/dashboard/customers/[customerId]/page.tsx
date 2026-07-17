@@ -8,6 +8,7 @@ import { requireSession } from "@/lib/session";
 import { euro } from "@/lib/utils";
 
 type PageProps = { params: Promise<{ customerId: string }> };
+type ClockRow = { currentTime: Date | string };
 
 export default async function Page({ params }: PageProps) {
   const session = await requireSession();
@@ -20,11 +21,12 @@ export default async function Page({ params }: PageProps) {
     db.query.staff.findMany({ where: eq(staff.salonId, session.salonId) }),
     db.query.services.findMany({ where: eq(services.salonId, session.salonId) }),
     db.query.auditLog.findMany({ where: and(eq(auditLog.salonId, session.salonId), eq(auditLog.entityId, customerId)), orderBy: [desc(auditLog.createdAt)], limit: 25 }),
-    db.execute(sql<{ currentTime: Date }>`select now() as "currentTime"`),
+    db.execute(sql`select now() as "currentTime"`),
   ]);
   if (!customer) notFound();
 
-  const currentTime = clockRows[0]?.currentTime ?? customer.updatedAt;
+  const clockRow = clockRows[0] as ClockRow | undefined;
+  const currentTime = new Date(clockRow?.currentTime ?? customer.updatedAt);
   const completed = customer.bookings.filter((booking) => booking.status === "completed").sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const lifetimeValue = completed.reduce((sum, booking) => sum + booking.service.priceCents, 0);
   const averageBooking = completed.length ? Math.round(lifetimeValue / completed.length) : 0;
