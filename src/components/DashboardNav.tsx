@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, CalendarRange, Compass, LayoutDashboard, Scissors, Users, Contact, Settings } from "lucide-react";
+import { CalendarDays, CalendarRange, Compass, LayoutDashboard, MapPinned, Scissors, Users, Contact, Settings } from "lucide-react";
 import { Logo } from "./Logo";
 import { logoutAction } from "@/actions/auth";
 
@@ -10,6 +10,7 @@ const items = [
   ["/dashboard/services", Scissors, "Services"],
   ["/dashboard/staff", Users, "Staff"],
   ["/dashboard/customers", Contact, "Customers"],
+  ["/dashboard/marketplace", MapPinned, "Marketplace"],
   ["/dashboard/settings", Settings, "Settings"],
 ] as const;
 
