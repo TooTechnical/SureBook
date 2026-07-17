@@ -27,16 +27,20 @@ export function StorefrontGallery({ items, businessName, radius, accent, text, m
   const current = galleryItems[safeActive];
   const title = current?.altText || `${businessName} gallery image ${safeActive + 1}`;
 
-  useEffect(() => { if (active !== safeActive) setActive(safeActive); }, [active, safeActive]);
   useEffect(() => {
     if (!lightbox || galleryItems.length === 0) return;
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(false); if (event.key === "ArrowRight") setActive((v) => (v + 1) % galleryItems.length); if (event.key === "ArrowLeft") setActive((v) => (v - 1 + galleryItems.length) % galleryItems.length); };
-    window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setLightbox(false);
+      if (event.key === "ArrowRight") setActive((value) => (Math.min(value, galleryItems.length - 1) + 1) % galleryItems.length);
+      if (event.key === "ArrowLeft") setActive((value) => (Math.min(value, galleryItems.length - 1) - 1 + galleryItems.length) % galleryItems.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [lightbox, galleryItems.length]);
 
   if (!current) return null;
-  const previous = () => setActive((v) => (v - 1 + galleryItems.length) % galleryItems.length);
-  const next = () => setActive((v) => (v + 1) % galleryItems.length);
+  const previous = () => setActive((value) => (Math.min(value, galleryItems.length - 1) - 1 + galleryItems.length) % galleryItems.length);
+  const next = () => setActive((value) => (Math.min(value, galleryItems.length - 1) + 1) % galleryItems.length);
   const markFailed = () => setFailed((old) => new Set(old).add(current.id));
   const media = current.imageType === "before_after" && current.comparisonImageUrl ? <BeforeAfter before={current.imageUrl} after={current.comparisonImageUrl} alt={title} radius={radius} /> : <img src={current.imageUrl} alt={title} onError={markFailed} style={{ width: "100%", height: "clamp(320px,52vw,620px)", objectFit: "cover", borderRadius: radius, display: "block" }} />;
 
