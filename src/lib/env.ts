@@ -13,7 +13,7 @@ const schema = z.object({
   PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(50).default(5),
   DEFAULT_DEPOSIT_CENTS: z.coerce.number().int().min(0).default(1000),
   OPENAI_API_KEY: z.string().optional(),
-  OPENAI_MODEL: z.string().default("gpt-5-mini"),
+  OPENAI_MODEL: z.string().default("gpt-5.6"),
   WA_PHONE_ID: z.string().optional(),
   WA_TOKEN: z.string().optional(),
 });
