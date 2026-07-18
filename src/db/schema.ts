@@ -1,5 +1,11 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, customType, doublePrecision, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+
+const geographyPoint = customType<{ data: string }>({
+  dataType() {
+    return "geography(Point,4326)";
+  },
+});
 
 export const bookingStatus = pgEnum("booking_status", ["pending_payment", "confirmed", "cancelled", "completed", "no_show"]);
 export const paymentStatus = pgEnum("payment_status", ["not_required", "pending", "paid", "refunded", "partially_refunded", "failed", "disputed"]);
@@ -14,6 +20,14 @@ export const salons = pgTable("salons", {
   address: text("address"),
   county: varchar("county", { length: 80 }),
   eircode: varchar("eircode", { length: 16 }),
+  latitude: doublePrecision("latitude"),
+  longitude: doublePrecision("longitude"),
+  location: geographyPoint("location"),
+  hasFemaleTherapist: boolean("has_female_therapist").notNull().default(false),
+  hasMaleTherapist: boolean("has_male_therapist").notNull().default(false),
+  mobileService: boolean("mobile_service").notNull().default(false),
+  wheelchairAccess: boolean("wheelchair_access").notNull().default(false),
+  homeVisits: boolean("home_visits").notNull().default(false),
   timezone: varchar("timezone", { length: 80 }).notNull().default("Europe/Dublin"),
   businessCategory: varchar("business_category", { length: 80 }).notNull().default("Beauty & wellness"),
   tagline: varchar("tagline", { length: 180 }),
@@ -38,7 +52,10 @@ export const salons = pgTable("salons", {
   reminderHours: jsonb("reminder_hours").$type<number[]>().notNull().default([24, 2]),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("salons_location_gix").using("gist", table.location),
+  index("salons_marketplace_capabilities_idx").on(table.storefrontPublished, table.mobileService, table.wheelchairAccess, table.homeVisits),
+]);
 
 export const storefrontImages = pgTable("storefront_images", {
   id: uuid("id").defaultRandom().primaryKey(),
