@@ -10,22 +10,66 @@ import { discountCodes, giftVouchers, memberships, referralCampaigns, servicePac
 import { services } from "@/db/schema";
 import { requireSession } from "@/lib/session";
 
-const optionalDate = z.string().optional().transform((value) => value ? new Date(value) : null);
+const optionalDate = z.preprocess(
+  (value) => {
+    if (typeof value !== "string" || value.trim() === "") return null;
+    return value.trim();
+  },
+  z
+    .string()
+    .transform((value, context) => {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        context.addIssue({ code: "custom", message: "Enter a valid date and time." });
+        return z.NEVER;
+      }
+      return date;
+    })
+    .nullable(),
+);
+
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
-const optionalPositiveInteger = z.preprocess((value) => value === "" || value == null ? undefined : value, z.coerce.number().int().positive().optional());
+const optionalPositiveInteger = z.preprocess(
+  (value) => (value === "" || value == null ? undefined : value),
+  z.coerce.number().int().positive().optional(),
+);
 
 export async function createDiscountCodeAction(formData: FormData) {
   const session = await requireSession();
-  const input = z.object({
-    code: z.string().trim().min(3).max(40).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")),
-    description: z.string().trim().max(220).optional(), type: z.enum(["percent", "fixed"]), amount: z.coerce.number().positive(),
-    minimumSpend: z.coerce.number().min(0).default(0), maximumRedemptions: optionalPositiveInteger,
-    startsAt: optionalDate, endsAt: optionalDate,
-  }).parse(Object.fromEntries(formData));
+  const input = z
+    .object({
+      code: z
+        .string()
+        .trim()
+        .min(3)
+        .max(40)
+        .transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "")),
+      description: z.string().trim().max(220).optional(),
+      type: z.enum(["percent", "fixed"]),
+      amount: z.coerce.number().positive(),
+      minimumSpend: z.coerce.number().min(0).default(0),
+      maximumRedemptions: optionalPositiveInteger,
+      startsAt: optionalDate,
+      endsAt: optionalDate,
+    })
+    .parse(Object.fromEntries(formData));
+
   const amount = input.type === "percent" ? Math.round(input.amount) : Math.round(input.amount * 100);
   if (input.type === "percent" && amount > 100) throw new Error("Percentage discounts cannot exceed 100%.");
   if (input.startsAt && input.endsAt && input.endsAt <= input.startsAt) throw new Error("End date must be after the start date.");
-  await db.insert(discountCodes).values({ salonId: session.salonId, code: input.code, description: input.description || null, type: input.type, amount, minimumSpendCents: Math.round(input.minimumSpend * 100), maximumRedemptions: input.maximumRedemptions || null, startsAt: input.startsAt, endsAt: input.endsAt });
+
+  await db.insert(discountCodes).values({
+    salonId: session.salonId,
+    code: input.code,
+    description: input.description || null,
+    type: input.type,
+    amount,
+    minimumSpendCents: Math.round(input.minimumSpend * 100),
+    maximumRedemptions: input.maximumRedemptions || null,
+    startsAt: input.startsAt,
+    endsAt: input.endsAt,
+  });
+
   revalidatePath("/dashboard/marketing");
 }
 
@@ -33,7 +77,12 @@ export async function toggleDiscountCodeAction(formData: FormData) {
   const session = await requireSession();
   const id = z.string().uuid().parse(formData.get("id"));
   const active = z.enum(["true", "false"]).parse(formData.get("active")) === "true";
-  await db.update(discountCodes).set({ active }).where(and(eq(discountCodes.id, id), eq(discountCodes.salonId, session.salonId)));
+
+  await db
+    .update(discountCodes)
+    .set(active ? { active: true, startsAt: null } : { active: false })
+    .where(and(eq(discountCodes.id, id), eq(discountCodes.salonId, session.salonId)));
+
   revalidatePath("/dashboard/marketing");
 }
 
