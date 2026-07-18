@@ -1,61 +1,167 @@
-# SureBook
+# SureBook — OpenAI Build Week 2026
 
-SureBook is a production-oriented booking, deposit, reminder, staff, and no-show protection platform designed for salons and barbers in Ireland.
+SureBook is an AI growth and operations platform for appointment-based businesses. It combines customer discovery, full-screen storefronts, secure booking and deposits, staff scheduling, CRM, no-show protection, analytics, marketing commerce and a GPT-5.6 Growth Operator in one coherent product.
 
-## What it solves
+**Build Week track:** Work & Productivity  
+**Submission branch:** `feature/openai-build-week-final-2026`
 
-- Empty chairs caused by forgotten appointments and no-shows
-- Manual deposit collection and awkward bank-transfer follow-up
-- Double-booked staff and inconsistent service durations
-- Customer details spread across notebooks, DMs, and personal phones
-- No reliable record of attendance, no-shows, deposits, or disputes
-- Salon owners lacking a clear view of protected revenue and daily operations
+## The problem
+
+Small appointment businesses lose time and revenue because their operations are fragmented across social DMs, notebooks, spreadsheets, payment links, calendars and generic marketing tools. Owners often cannot answer basic questions quickly:
+
+- Which services are driving completed bookings?
+- Where are no-shows or cancellations hurting revenue?
+- What should the business promote next?
+- Which campaign is safe to send to consented customers?
+- How can a customer discover, trust and book the business without friction?
+
+SureBook creates one operating layer for that entire journey.
+
+## Build Week product story
+
+### Customer journey
+
+1. Search local businesses by service, location, price, rating and availability.
+2. Compare businesses in list or map view.
+3. Open a full-screen storefront with services, staff, reviews, gallery, opening hours and directions.
+4. Choose a service, professional, date and time.
+5. Pay any required deposit securely through Stripe Connect.
+
+### Business journey
+
+1. Manage services, staff, customers, availability and storefront content.
+2. Track revenue, bookings, completed appointments, no-shows, protected deposits and repeat customers.
+3. Launch discounts, referrals, gift vouchers, memberships and packages.
+4. Ask the SureBook Growth Operator to diagnose booking performance or create a campaign.
+5. GPT-5.6 analyses verified business context and returns a measurable, owner-approved action plan.
+
+## GPT-5.6 implementation
+
+SureBook uses the OpenAI Responses API with the `gpt-5.6` alias and high reasoning effort.
+
+The Growth Operator receives only verified, business-level context:
+
+- storefront information
+- active services, durations, prices and deposits
+- approved review statistics
+- aggregate customer statistics
+- completed, cancelled and no-show booking counts
+- popular services over the previous 30 days
+
+It does **not** send customer identities to the model. The system prompt prohibits fabricated reviews, qualifications, availability, prices, consent, medical claims or financial results. Outputs distinguish verified observations from assumptions and require owner approval before publishing.
+
+Supported decision workflows:
+
+- growth and booking diagnosis
+- campaign creation
+- Instagram campaign generation
+- storefront SEO audit
+- retention and loyalty planning
+- custom operational advice
+
+Every generation stores the model, context version and reasoning effort for traceability.
+
+## How Codex was used
+
+Codex acted as the primary engineering collaborator during Build Week. It was used to:
+
+- inspect the existing architecture and identify production risks
+- design and implement the AI marketing and commerce layer
+- build the discovery marketplace and geospatial filtering
+- create the full-screen unified storefront
+- design the business analytics experience
+- diagnose TypeScript, Stripe and Drizzle integration failures
+- consolidate feature branches into the final submission branch
+- harden prompts, privacy boundaries and model traceability
+- prepare submission documentation and judge testing instructions
+
+Human product decisions remained explicit. The entrant selected the problem, target audience, commercial model, booking/deposit policy, feature priorities, visual direction and final scope. Codex accelerated implementation, debugging and integration rather than replacing product ownership.
+
+## What existed before Build Week
+
+Before the submission period, SureBook already had a core booking foundation:
+
+- business signup and login
+- public booking page
+- services and staff
+- appointment scheduling
+- Stripe Connect deposits
+- reminder emails
+- customer records
+- no-show outcome tracking
+
+## Meaningful Build Week extensions
+
+The work added during the submission period includes:
+
+- GPT-5.6 Growth Operator using verified business context
+- AI generation history and traceability
+- discounts and redemption tracking
+- referral campaigns and conversion tracking
+- gift vouchers and balances
+- memberships and service packages
+- marketplace discovery and local filters
+- PostGIS radius queries and map clustering
+- business marketplace settings
+- expanded business analytics
+- full-screen unified customer storefront
+- stronger SEO and structured business metadata
+- CI and deployment hardening
+
+The dated commit and pull-request history provides evidence of this work.
 
 ## Product capabilities
 
-- Salon signup and secure cookie-based authentication
-- Public booking page at `/book/[slug]`
-- Configurable services, durations, prices, and deposits
-- Multi-staff scheduling with overlap protection
-- Customer records, marketing consent, visit counts, and no-show history
-- Stripe Connect Standard onboarding for direct salon payouts
-- Immediate deposit charging, avoiding unreliable long-lived card holds
-- Stripe webhook-driven booking confirmation and payment state
-- Automatic 24-hour and 2-hour email reminders
-- Stale incomplete-payment cleanup through Vercel Cron
-- Attendance and no-show outcome recording with an audit trail
-- Europe/Dublin timezone and euro formatting
-- Mobile-first salon dashboard
+- Secure business authentication
+- Multi-staff scheduling and overlap protection
+- Services, categories, durations, prices and deposits
+- Customer CRM and consent tracking
+- Stripe Connect Standard payouts
+- Webhook-driven booking confirmation
+- Automated reminders and stale-payment cleanup
+- Attendance, no-show and audit records
+- Business analytics dashboard
+- Discovery marketplace and map view
+- Full-screen public storefront
+- Reviews, galleries, team profiles and opening hours
+- Discounts, referrals, vouchers, memberships and packages
+- GPT-5.6 Growth Operator
 
 ## Architecture
 
-- Next.js 16 App Router and React 19
+- Next.js 16 App Router
+- React 19
 - TypeScript
-- PostgreSQL (Neon compatible)
-- Drizzle ORM and SQL migrations
-- Stripe and Stripe Connect Standard
-- Resend email
-- Vercel Cron
-- Zod input validation
-- Encrypted, HTTP-only JWT session cookie
+- PostgreSQL / Neon
+- Drizzle ORM
+- PostGIS
+- OpenAI Responses API
+- Stripe and Stripe Connect
+- Resend
+- Vercel and Vercel Cron
+- Mapbox GL
+- Zod validation
+- Signed HTTP-only session cookies
 
 ## Local setup
 
 ```bash
 npm install
 cp .env.example .env.local
-npm run db:migrate
+npx drizzle-kit push
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-## Environment variables
+## Required environment variables
 
 ```env
 DATABASE_URL=
 SESSION_SECRET=
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=
 STRIPE_WEBHOOK_SECRET=
@@ -64,8 +170,8 @@ EMAIL_FROM=SureBook <onboarding@resend.dev>
 CRON_SECRET=
 PLATFORM_FEE_PERCENT=5
 DEFAULT_DEPOSIT_CENTS=1000
-WA_PHONE_ID=
-WA_TOKEN=
+NEXT_PUBLIC_MAPBOX_TOKEN=
+BLOB_READ_WRITE_TOKEN=
 ```
 
 Generate a session secret:
@@ -74,86 +180,100 @@ Generate a session secret:
 openssl rand -base64 48
 ```
 
-## Database
+## Database setup
 
-Generate a migration after changing the schema:
-
-```bash
-npm run db:generate
-```
-
-Apply migrations:
+Apply Drizzle-managed schemas:
 
 ```bash
-npm run db:migrate
+npx drizzle-kit push
 ```
 
-## Stripe setup
+Apply the geospatial marketplace migration when PostGIS is available:
 
-1. Create or use a Stripe platform account.
-2. Enable Stripe Connect.
-3. Add the secret and publishable keys.
-4. Register this webhook endpoint:
+```bash
+npm run db:geo
+```
+
+## Stripe test setup
+
+Register:
 
 ```text
 https://YOUR_DOMAIN/api/stripe/webhook
 ```
 
-Subscribe to:
+Required events include:
 
 - `payment_intent.succeeded`
 - `payment_intent.payment_failed`
 - `charge.dispute.created`
 - `account.updated`
+- `checkout.session.completed`
+- `customer.subscription.deleted`
+- `invoice.paid`
 
-For local webhook testing:
-
-```bash
-stripe listen --forward-to localhost:3000/api/stripe/webhook
-```
-
-Use Stripe's standard test card:
+Test card:
 
 ```text
 4242 4242 4242 4242
 ```
 
-Use any future expiry date, any three-digit CVC, and a valid postcode.
+Use any future expiry date, any three-digit CVC and a valid postcode.
 
-## Vercel deployment
+## Judge testing path
 
-1. Import the repository into Vercel.
-2. Add every required environment variable.
-3. Provision Neon Postgres and apply the migration.
-4. Set `NEXT_PUBLIC_APP_URL` to the production URL.
-5. Register the production Stripe webhook.
-6. Ensure `CRON_SECRET` is configured in Vercel.
+The deployed test account and exact credentials must be placed in the private Devpost testing instructions, not committed publicly.
 
-The included `vercel.json` runs reminders hourly and removes abandoned payment attempts hourly.
+Recommended test flow:
+
+1. Open `/discover` and inspect marketplace search and filters.
+2. Open a business through `/s/[slug]`.
+3. Review services, team, gallery, reviews and location.
+4. Start the booking flow.
+5. Log in to the supplied business test account.
+6. Open `/dashboard` to inspect operational analytics.
+7. Open `/dashboard/assistant`.
+8. Run **Growth diagnosis** using the prefilled prompt.
+9. Verify the response identifies observations, assumptions and measurable next actions.
+10. Open `/dashboard/marketing` and `/dashboard/marketing/referrals`.
 
 ## Validation
 
+Run before every release:
+
 ```bash
+rm -rf .next
 npm run typecheck
 npm run lint
 npm run build
 ```
 
-All three checks pass for this branch.
+Then test the deployed production-like preview in an incognito browser.
 
-## Payment policy design
+## Demo video structure
 
-SureBook charges the deposit immediately and records it against the appointment. This is deliberate: ordinary online card authorisations generally cannot be held safely for appointments booked weeks in advance. The salon can credit the deposit against the final service price, retain it for an eligible no-show, or later process a policy-compliant refund.
+The submission video must remain under three minutes:
 
-## Security and compliance notes
+- 0:00–0:20 — problem and product promise
+- 0:20–0:55 — discovery and storefront
+- 0:55–1:25 — booking and deposit protection
+- 1:25–2:15 — dashboard and GPT-5.6 Growth Operator
+- 2:15–2:40 — marketing commerce and impact
+- 2:40–2:55 — Codex collaboration and closing statement
+
+## Security and privacy
 
 - Passwords are hashed with bcrypt.
-- Sessions use signed, HTTP-only, secure cookies in production.
+- Sessions use signed HTTP-only cookies.
 - Server actions validate input with Zod.
 - Stripe webhooks validate signatures.
-- Cron routes require bearer-token authentication.
-- Connected-account status comes from Stripe, not redirect URLs.
-- Marketing consent is stored separately from booking consent.
-- Payment and attendance outcomes are recorded in an audit log.
+- Cron routes require bearer authentication.
+- Connected-account status is verified through Stripe.
+- Marketing consent is stored independently.
+- Customer identities are excluded from GPT-5.6 context.
+- AI outputs are owner-reviewed before use.
+- Payment and attendance outcomes are auditable.
 
-Before taking live payments, add the salon's legal cancellation wording, privacy policy, processor terms, support process, and refund/dispute procedures.
+## Production note
+
+Before accepting live client payments, SureBook still requires final legal wording, privacy and processor terms, refund/dispute procedures, monitoring, accessibility review and a formal production security assessment. The Build Week deployment is intended as a functioning evaluation environment and commercial-quality product demonstration.
