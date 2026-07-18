@@ -27,7 +27,6 @@ export function StorefrontGallery({ items, businessName, radius, accent, text, m
   const current = galleryItems[safeActive];
   const title = current?.altText || `${businessName} gallery image ${safeActive + 1}`;
 
-  useEffect(() => { if (active !== safeActive) setActive(safeActive); }, [active, safeActive]);
   useEffect(() => {
     if (!lightbox || galleryItems.length === 0) return;
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setLightbox(false); if (event.key === "ArrowRight") setActive((v) => (v + 1) % galleryItems.length); if (event.key === "ArrowLeft") setActive((v) => (v - 1 + galleryItems.length) % galleryItems.length); };

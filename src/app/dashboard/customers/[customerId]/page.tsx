@@ -38,6 +38,8 @@ export default async function Page({ params }: PageProps) {
   const favouriteStaff = customer.preferredStaff?.name || [...staffCounts.values()].sort((a, b) => b.count - a.count)[0]?.name || "Not enough history";
   const intervals = completed.slice(0, -1).map((booking, index) => Math.round((booking.startsAt.getTime() - completed[index + 1].startsAt.getTime()) / 86_400_000)).filter((days) => days > 0);
   const normalCycleDays = intervals.length ? Math.round(intervals.reduce((sum, days) => sum + days, 0) / intervals.length) : null;
+  // This async server component is evaluated once per request; current time is required for the rebooking signal.
+  // eslint-disable-next-line react-hooks/purity
   const daysSinceVisit = completed[0] ? Math.floor((Date.now() - completed[0].startsAt.getTime()) / 86_400_000) : null;
   const dueToRebook = Boolean(normalCycleDays && daysSinceVisit && daysSinceVisit > normalCycleDays);
 
