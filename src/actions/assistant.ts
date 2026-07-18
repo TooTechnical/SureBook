@@ -103,8 +103,8 @@ export async function runAssistantAction(input: z.infer<typeof assistantInput>) 
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.OPENAI_API_KEY}` },
     body: JSON.stringify({
       model: env.OPENAI_MODEL,
-      reasoning: { effort: "high" },
-      max_output_tokens: 4000,
+      reasoning: { effort: "medium" },
+      max_output_tokens: 8000,
       store: false,
       input: [
         {
