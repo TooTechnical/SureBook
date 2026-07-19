@@ -5,6 +5,15 @@ SureBook is an AI growth and operations platform for appointment-based businesse
 **Build Week track:** Work & Productivity  
 **Submission branch:** `feature/openai-build-week-final-2026`
 
+## OpenAI Build Week highlights
+
+| OpenAI technology | How SureBook used it | Why it matters |
+| --- | --- | --- |
+| **GPT-5.6** | Powers the SureBook Growth Operator through the OpenAI Responses API, using verified business context to diagnose booking performance, create campaigns, audit SEO and recommend measurable next actions. | Gives small appointment businesses practical growth support without requiring a separate agency, analyst or consultant. |
+| **Codex** | Acted as the primary engineering collaborator during Build Week: inspecting the existing codebase, implementing features, debugging production issues, integrating branches, strengthening privacy boundaries and preparing submission documentation. | Compressed a large amount of product engineering, testing and integration into the Build Week timeframe while keeping human product ownership explicit. |
+
+The core OpenAI implementation is visible in [`src/actions/assistant.ts`](src/actions/assistant.ts). The Growth Operator sends structured business context to the OpenAI Responses API, excludes customer identities, applies task-specific instructions and stores generation metadata for traceability.
+
 ## The problem
 
 Small appointment businesses lose time and revenue because their operations are fragmented across social DMs, notebooks, spreadsheets, payment links, calendars and generic marketing tools. Owners often cannot answer basic questions quickly:
@@ -35,9 +44,18 @@ SureBook creates one operating layer for that entire journey.
 4. Ask the SureBook Growth Operator to diagnose booking performance or create a campaign.
 5. GPT-5.6 analyses verified business context and returns a measurable, owner-approved action plan.
 
-## GPT-5.6 implementation
+## How GPT-5.6 was used
 
-SureBook uses the OpenAI Responses API with the `gpt-5.6` alias and high reasoning effort.
+SureBook uses the OpenAI Responses API with the `gpt-5.6` model alias and configurable reasoning effort.
+
+The implementation flow is:
+
+1. The authenticated business owner selects a task such as booking diagnosis, Instagram campaign, SEO audit, promotion, loyalty plan or custom advice.
+2. SureBook gathers verified business-level context from PostgreSQL, including services, prices, deposits, approved review statistics and aggregate booking/customer metrics.
+3. Customer identities are excluded before any request is sent to OpenAI.
+4. A task-specific developer instruction constrains the output and prohibits fabricated business facts, reviews, qualifications, availability, prices, consent, medical claims or financial results.
+5. GPT-5.6 returns a structured, practical response that separates verified observations from assumptions and recommends measurable next actions.
+6. SureBook stores the model, context version and reasoning effort alongside each generation for traceability.
 
 The Growth Operator receives only verified, business-level context:
 
@@ -48,9 +66,9 @@ The Growth Operator receives only verified, business-level context:
 - completed, cancelled and no-show booking counts
 - popular services over the previous 30 days
 
-It does **not** send customer identities to the model. The system prompt prohibits fabricated reviews, qualifications, availability, prices, consent, medical claims or financial results. Outputs distinguish verified observations from assumptions and require owner approval before publishing.
+It does **not** send customer identities to the model. Outputs require owner review before publishing or sending.
 
-Supported decision workflows:
+### GPT-5.6 decision workflows
 
 - growth and booking diagnosis
 - campaign creation
@@ -59,21 +77,42 @@ Supported decision workflows:
 - retention and loyalty planning
 - custom operational advice
 
-Every generation stores the model, context version and reasoning effort for traceability.
+### Why GPT-5.6 was a strong fit
+
+SureBook needed more than generic text generation. The Growth Operator has to interpret multiple operational signals, distinguish facts from assumptions, prioritise actions by impact and effort, and produce commercially useful next steps. GPT-5.6 provides the reasoning quality needed for that decision-support workflow while the application supplies the verified business context and safety boundaries.
 
 ## How Codex was used
 
-Codex acted as the primary engineering collaborator during Build Week. It was used to:
+Codex acted as the primary engineering collaborator during Build Week.
 
-- inspect the existing architecture and identify production risks
-- design and implement the AI marketing and commerce layer
-- build the discovery marketplace and geospatial filtering
-- create the full-screen unified storefront
-- design the business analytics experience
-- diagnose TypeScript, Stripe and Drizzle integration failures
-- consolidate feature branches into the final submission branch
-- harden prompts, privacy boundaries and model traceability
-- prepare submission documentation and judge testing instructions
+### Architecture and planning
+
+- inspected the existing Next.js, Drizzle, Stripe and booking architecture
+- identified production risks and missing submission-critical workflows
+- broke the Build Week scope into implementable feature branches and integration steps
+- helped preserve the existing booking foundation while extending the product safely
+
+### Product implementation
+
+- designed and implemented the AI marketing and commerce layer
+- built the discovery marketplace and geospatial filtering
+- created the full-screen unified storefront
+- expanded business analytics and marketing workflows
+- added model traceability and safer prompt boundaries
+
+### Debugging and hardening
+
+- diagnosed TypeScript, Stripe and Drizzle integration failures
+- fixed booking, discount scheduling and Stripe checkout presentation issues
+- consolidated feature branches into the final submission branch
+- supported CI, deployment and production-readiness checks
+- reviewed privacy boundaries so customer identities were not included in GPT-5.6 context
+
+### Submission support
+
+- prepared README documentation
+- documented judge testing paths
+- helped structure the demo narrative around the customer journey, business dashboard and GPT-5.6 Growth Operator
 
 Human product decisions remained explicit. The entrant selected the problem, target audience, commercial model, booking/deposit policy, feature priorities, visual direction and final scope. Codex accelerated implementation, debugging and integration rather than replacing product ownership.
 
