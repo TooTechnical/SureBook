@@ -17,5 +17,5 @@ const items = [
 ] as const;
 
 export function DashboardNav() {
-  return <aside style={{ padding: 22, borderRight: "1px solid var(--line)", minHeight: "100vh", background: "white" }}><Logo /><nav style={{ display: "grid", gap: 7, marginTop: 35 }}>{items.map(([href, Icon, label]) => <Link key={href} href={href} className="btn btn-secondary" style={{ justifyContent: "flex-start", border: "none" }}><Icon size={18} />{label}</Link>)}</nav><form action={logoutAction} style={{ marginTop: 30 }}><button className="btn btn-secondary" style={{ width: "100%" }}>Log out</button></form></aside>;
+  return <aside className="dashboard-nav" aria-label="Business dashboard navigation"><Logo /><nav className="dashboard-nav-links">{items.map(([href, Icon, label]) => <Link key={href} href={href} className="btn btn-secondary dashboard-nav-link"><Icon size={18} aria-hidden="true" /><span>{label}</span></Link>)}</nav><form action={logoutAction} style={{ marginTop: 30 }}><button className="btn btn-secondary" style={{ width: "100%" }}>Log out</button></form></aside>;
 }
