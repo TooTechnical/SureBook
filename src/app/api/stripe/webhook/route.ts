@@ -8,6 +8,7 @@ import { bookings, salons } from "@/db/schema";
 import { env } from "@/lib/env";
 import { requireStripe } from "@/lib/stripe";
 import { sendBookingConfirmation } from "@/lib/email";
+import { scheduleBookingAutomations } from "@/lib/automation";
 
 export async function POST(request: Request) {
   if (!env.STRIPE_WEBHOOK_SECRET) return NextResponse.json({ error: "Webhook not configured" }, { status: 503 });
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
       const booking = bookingId ? await db.query.bookings.findFirst({ where: eq(bookings.id, bookingId), with: { customer: true, service: true, salon: true } }) : null;
       if (booking && booking.status === "pending_payment") {
         await db.update(bookings).set({ status: "confirmed", paymentStatus: "paid", stripeChargeId: typeof paymentIntent.latest_charge === "string" ? paymentIntent.latest_charge : null, updatedAt: new Date() }).where(eq(bookings.id, booking.id));
+        await scheduleBookingAutomations({ salonId: booking.salonId, bookingId: booking.id, triggers: ["booking_confirmed", "before_appointment"], appointmentTime: booking.startsAt });
         if (paymentIntent.metadata.referralId) await db.update(referrals).set({ status: "converted", convertedAt: new Date() }).where(eq(referrals.id, paymentIntent.metadata.referralId));
         if (booking.customer.email) await sendBookingConfirmation({ to: booking.customer.email, salon: booking.salon.name, service: booking.service.name, startsAt: booking.startsAt, depositCents: booking.depositCents });
       }
