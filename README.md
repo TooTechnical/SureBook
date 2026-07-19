@@ -107,6 +107,75 @@ The work added during the submission period includes:
 - full-screen unified customer storefront
 - stronger SEO and structured business metadata
 - CI and deployment hardening
+- versioned SureBook Growth Score with transparent category scoring
+- period-based business KPI dashboard and in-app weekly reports
+- owner-controlled lifecycle automation foundation
+- installable mobile PWA and offline fallback
+- separately authenticated internal operations console
+
+## Epic 7 analytics
+
+The business dashboard supports shareable 7-day, 30-day, 90-day and current-year views. KPI definitions are implemented in server-side modules and use real booking, payment, review and customer records. Revenue currently means deposits on records whose payment status is `paid`; the schema does not yet expose a separate successful-payment timestamp, so period attribution uses the booking creation timestamp. Deposits saved includes only paid deposits associated with bookings explicitly marked `no_show`. Repeat customers have more than one completed booking.
+
+Charts use accessible labelled HTML rather than a decorative chart dependency. Empty or low-sample data stays visible as unavailable or receives a documented neutral safeguard.
+
+Weekly reports are always available in-app. Owner email delivery is opt-in and disabled by default.
+
+## Automation workflows
+
+Businesses can configure booking confirmations, appointment reminders, post-appointment thank-you messages, review requests, rebooking reminders and missed-appointment follow-ups. Definitions include trigger, delay, channel, template, owner-approval requirement and retry limit. Executions have a unique idempotency key, scheduled state, attempt count, safe failure message and delivery status.
+
+Email delivery reuses Resend. Marketing rebooking reminders require stored marketing consent. SMS is deliberately behind a provider interface and reports **SMS provider not configured**; no SMS is presented as live. Cron processing is protected by `CRON_SECRET` and runs every 15 minutes on Vercel.
+
+## Mobile and PWA support
+
+SureBook includes an installable web manifest, a branded scalable icon, service-worker registration, safe-area-aware dashboard navigation and a basic offline fallback. Live business and customer records are never cached for offline use. File inputs continue to support normal mobile camera/gallery selection. Native iOS/Android development and push notifications remain roadmap items.
+
+## Internal admin console
+
+`/internal` uses a separate signed cookie, a separate internal-user table and explicit `super_admin`, `support`, `finance`, `operations` and `read_only_analyst` roles. Ordinary business-owner sessions cannot authenticate into it. The core console shows platform businesses, booking/payment outcomes, Stripe connection state, reviews, support tickets, safe application errors, AI generations and automation sends. Sensitive future write actions must check role permissions on the server and append to `admin_audit_logs`.
+
+Internal users must be provisioned through a secure operator-controlled database workflow with a bcrypt password hash. No bootstrap password or test credential is committed.
+
+## SureBook Growth Score methodology
+
+`growth-score-v1` combines deterministic category scores: SEO 20%, Photos 15%, Reviews 20%, Bookings 25% and Marketing 20%. Inputs are measurable SureBook fields only. Booking-rate conclusions use a neutral baseline until at least ten bookings are available, and new businesses are not given a zero review score before having a reasonable opportunity to earn reviews. Each calculation reports positive and negative factors, an explicit data window and deterministic linked recommendations. Daily/history-changing snapshots are stored in `growth_score_snapshots`.
+
+The score is advisory. It is not scientifically validated and does not guarantee improved revenue.
+
+## Privacy and owner-approval boundaries
+
+- GPT-5.6 receives aggregate verified business context, not customer identities.
+- AI may improve drafts but cannot configure or send an automation by itself.
+- Automation remains disabled until a business owner enables it.
+- Transactional and marketing consent are treated separately.
+- SMS is skipped when no provider or customer SMS consent exists.
+- Internal analytics use customer-safe identifiers and never expose card details, credentials or full payment payloads.
+
+## Build Week limitations and roadmap
+
+- Revenue period attribution needs a first-class successful-payment timestamp for full accounting precision.
+- Automated weekly-report email rendering is not yet connected to a weekly sender.
+- Advanced admin mutations, suspension, disputes, refunds, blob orphan scanning and webhook-health telemetry remain deferred.
+- SMS provider integration, unsubscribe-token endpoints and a dead-letter operations UI remain deferred.
+- Native mobile apps and push notifications are future work; the current target is the responsive PWA.
+- Production rollout still requires migration review, internal-user provisioning, legal review, monitoring and an end-to-end security assessment.
+
+## Codex development session
+
+Codex was used in this primary development thread for:
+
+- repository inspection
+- branch planning
+- architecture
+- implementation
+- debugging
+- testing
+- security review
+- documentation
+- pull-request preparation
+
+The `/feedback` Session ID is intentionally not included in this public README.
 
 The dated commit and pull-request history provides evidence of this work.
 
