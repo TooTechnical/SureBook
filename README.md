@@ -257,6 +257,8 @@ Apply Drizzle-managed schemas:
 npx drizzle-kit push
 ```
 
+Run this after pulling a branch that adds schema files. The Epics 7–10 branch requires the operations tables defined in `src/db/operations-schema.ts`; until they are applied, the core dashboard remains available but automation preferences and Growth Score history are read-only.
+
 Apply the geospatial marketplace migration when PostGIS is available:
 
 ```bash

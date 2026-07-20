@@ -9,6 +9,7 @@ import { calculateBusinessMetrics } from "@/lib/analytics";
 import { calculateGrowthScore } from "@/lib/growth-score";
 import { requireSession } from "@/lib/session";
 import { euro } from "@/lib/utils";
+import { isMissingDatabaseRelation, optionalSchemaQuery } from "@/lib/optional-schema";
 import { recordOutcomeAction } from "@/actions/salon";
 
 const periods = { "7d": 7, "30d": 30, "90d": 90, year: 0 } as const;
@@ -42,21 +43,30 @@ export default async function Dashboard({ searchParams }: PageProps) {
   const previousStart = new Date(periodStart.getTime() - duration);
   const today = startOfDay(now);
 
-  const [salon, bookingRows, reviewRows, hours, imageRows, staffRows, automations, weeklyPreference, activeDiscounts, activeReferrals, operatorUse, latestSnapshot] = await Promise.all([
+  const [salon, bookingRows, reviewRows, hours, imageRows, staffRows, activeDiscounts, activeReferrals, operatorUse] = await Promise.all([
     db.query.salons.findFirst({ where: eq(salons.id, session.salonId) }),
     db.query.bookings.findMany({ where: and(eq(bookings.salonId, session.salonId), gte(bookings.createdAt, previousStart), lt(bookings.createdAt, now)), with: { customer: true, service: true, staff: true }, orderBy: [asc(bookings.startsAt)] }),
     db.query.reviews.findMany({ where: and(eq(reviews.salonId, session.salonId), eq(reviews.approved, true)), orderBy: [desc(reviews.createdAt)] }),
     db.query.businessHours.findMany({ where: eq(businessHours.salonId, session.salonId) }),
     db.query.storefrontImages.findMany({ where: eq(storefrontImages.salonId, session.salonId) }),
     db.query.staff.findMany({ where: eq(staff.salonId, session.salonId) }),
-    db.query.automationDefinitions.findMany({ where: eq(automationDefinitions.salonId, session.salonId) }),
-    db.query.weeklyReportPreferences.findFirst({ where: eq(weeklyReportPreferences.salonId, session.salonId) }),
     db.query.discountCodes.findMany({ where: and(eq(discountCodes.salonId, session.salonId), eq(discountCodes.active, true)) }),
     db.query.referralCampaigns.findMany({ where: and(eq(referralCampaigns.salonId, session.salonId), eq(referralCampaigns.active, true)) }),
     db.query.aiGenerations.findFirst({ where: and(eq(aiGenerations.salonId, session.salonId), gte(aiGenerations.createdAt, subDays(now, 30))), orderBy: [desc(aiGenerations.createdAt)] }),
-    db.query.growthScoreSnapshots.findFirst({ where: eq(growthScoreSnapshots.salonId, session.salonId), orderBy: [desc(growthScoreSnapshots.calculatedAt)] }),
   ]);
   if (!salon) return null;
+  const automationQuery: Promise<{ automationType: string; enabled: boolean }[]> = db.select({ automationType: automationDefinitions.automationType, enabled: automationDefinitions.enabled }).from(automationDefinitions).where(eq(automationDefinitions.salonId, session.salonId));
+  const weeklyPreferenceQuery: Promise<{ enabled: boolean; emailEnabled: boolean }[]> = db.select({ enabled: weeklyReportPreferences.enabled, emailEnabled: weeklyReportPreferences.emailEnabled }).from(weeklyReportPreferences).where(eq(weeklyReportPreferences.salonId, session.salonId)).limit(1);
+  const latestSnapshotQuery: Promise<{ overallScore: number; calculatedAt: Date }[]> = db.select({ overallScore: growthScoreSnapshots.overallScore, calculatedAt: growthScoreSnapshots.calculatedAt }).from(growthScoreSnapshots).where(eq(growthScoreSnapshots.salonId, session.salonId)).orderBy(desc(growthScoreSnapshots.calculatedAt)).limit(1);
+  const [automationsResult, weeklyPreferenceResult, latestSnapshotResult] = await Promise.all([
+    optionalSchemaQuery(automationQuery, []),
+    optionalSchemaQuery(weeklyPreferenceQuery, []),
+    optionalSchemaQuery(latestSnapshotQuery, []),
+  ]);
+  const automations = automationsResult.data;
+  const weeklyPreference = weeklyPreferenceResult.data[0];
+  const latestSnapshot = latestSnapshotResult.data[0];
+  const operationsSchemaAvailable = automationsResult.schemaAvailable && weeklyPreferenceResult.schemaAvailable && latestSnapshotResult.schemaAvailable;
   const serviceRows = await db.query.services.findMany({ where: eq(services.salonId, session.salonId) });
   const currentRows = bookingRows.filter((row) => row.createdAt >= periodStart);
   const previousRows = bookingRows.filter((row) => row.createdAt < periodStart);
@@ -78,8 +88,12 @@ export default async function Dashboard({ searchParams }: PageProps) {
     marketing: { activeTools: activeDiscounts.length, referralEnabled: activeReferrals.length > 0, audienceSize: new Set(currentRows.filter((row) => row.customer.marketingConsent).map((row) => row.customerId)).size, weeklyReportEnabled: weeklyPreference?.enabled ?? true, automationCount: automations.filter((row) => row.enabled).length, recentOperatorUse: Boolean(operatorUse) },
   });
 
-  if (!latestSnapshot || latestSnapshot.calculatedAt < startOfDay(now) || latestSnapshot.overallScore !== score.overall) {
-    await db.insert(growthScoreSnapshots).values({ salonId: session.salonId, version: score.version, overallScore: score.overall, categoryScores: score.categories, factors: { positive: score.positiveFactors, negative: score.negativeFactors }, dataWindowStart: periodStart, dataWindowEnd: now });
+  if (operationsSchemaAvailable && (!latestSnapshot || latestSnapshot.calculatedAt < startOfDay(now) || latestSnapshot.overallScore !== score.overall)) {
+    try {
+      await db.insert(growthScoreSnapshots).values({ salonId: session.salonId, version: score.version, overallScore: score.overall, categoryScores: score.categories, factors: { positive: score.positiveFactors, negative: score.negativeFactors }, dataWindowStart: periodStart, dataWindowEnd: now });
+    } catch (error) {
+      if (!isMissingDatabaseRelation(error)) throw error;
+    }
   }
 
   const outcomes = [
@@ -92,6 +106,7 @@ export default async function Dashboard({ searchParams }: PageProps) {
 
   return <>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 18, alignItems: "end", flexWrap: "wrap" }}><div><span className="badge">Live business data</span><h1 style={{ fontSize: 38, marginBottom: 6 }}>Good day, {session.name}</h1><p style={{ color: "var(--muted)", margin: 0 }}>Performance, booking health and clear next actions.</p></div><nav aria-label="Dashboard date range" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{Object.entries({ "7d": "7 days", "30d": "30 days", "90d": "90 days", year: "This year" }).map(([key, label]) => <Link key={key} className={`btn ${period === key ? "btn-primary" : "btn-secondary"}`} href={`/dashboard?period=${key}`}>{label}</Link>)}</nav></div>
+    {!operationsSchemaAvailable && <aside className="card" role="status" style={{ padding: 16, marginTop: 20, borderColor: "#d9b84d", background: "#fff9e8" }}><strong>Database update required</strong><p style={{ marginBottom: 0 }}>Core dashboard data is available, but Growth Score history, weekly preferences and automations will remain read-only until an operator runs <code>npx drizzle-kit push</code> against this environment.</p></aside>}
 
     <div className="grid-auto" style={{ margin: "26px 0" }}>
       <Kpi label="Revenue" value={euro(current.revenueCents)} detail="Successful paid booking deposits recorded in this period." href="/dashboard/bookings" current={current.revenueCents} previous={previous.revenueCents} />
