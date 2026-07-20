@@ -7,10 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:migrations": "node --import tsx --test test/migration-safety.test.ts",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:geo": "tsx scripts/apply-geospatial-migration.ts",
+    "db:operations": "tsx scripts/apply-operations-migration.ts",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx src/db/seed.ts"
   },

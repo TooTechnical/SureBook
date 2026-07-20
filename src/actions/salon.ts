@@ -12,6 +12,7 @@ import { requireStripe } from "@/lib/stripe";
 import { syncStripeConnectStatus } from "@/lib/stripe-connect";
 import { env } from "@/lib/env";
 import { sendOutcome } from "@/lib/email";
+import { scheduleBookingAutomations } from "@/lib/automation";
 
 const optionalUrl = z.string().trim().url().optional().or(z.literal(""));
 const optionalUuid = z.string().uuid().optional().or(z.literal(""));
@@ -181,5 +182,6 @@ export async function recordOutcomeAction(formData: FormData) {
     await tx.insert(auditLog).values({ salonId: session.salonId, action: `booking.${outcome}`, entityType: "booking", entityId: booking.id });
   });
   if (booking.customer.email) await sendOutcome({ to: booking.customer.email, salon: booking.salon.name, outcome, depositCents: booking.depositCents, reviewUrl: outcome === "completed" ? `${env.NEXT_PUBLIC_APP_URL}/review/${booking.id}` : undefined });
+  await scheduleBookingAutomations({ salonId: booking.salonId, bookingId: booking.id, triggers: outcome === "completed" ? ["appointment_completed"] : ["appointment_no_show"], appointmentTime: booking.startsAt });
   revalidatePath("/dashboard"); revalidatePath("/dashboard/bookings");
 }

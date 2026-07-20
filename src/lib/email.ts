@@ -9,6 +9,11 @@ async function send(to: string | string[], subject: string, html: string) {
   await resend.emails.send({ from: env.EMAIL_FROM, to, subject, html });
 }
 
+export async function sendAutomationEmail(input: { to: string; subject: string; body: string }) {
+  const html = input.body.split("\n").map((line) => `<p>${line.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</p>`).join("");
+  return send(input.to, input.subject, html);
+}
+
 export async function sendBookingConfirmation(input: { to: string; salon: string; service: string; startsAt: Date; depositCents: number }) {
   return send(input.to, `Booking confirmed with ${input.salon}`, `<h1>Your appointment is confirmed</h1><p><strong>${input.service}</strong></p><p>${input.startsAt.toLocaleString("en-IE", { timeZone: "Europe/Dublin" })}</p><p>Deposit paid: ${euro(input.depositCents)}</p><p>Please contact the business directly if you need to change your appointment.</p>`);
 }

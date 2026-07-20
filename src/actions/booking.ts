@@ -11,6 +11,7 @@ import { bookings, customers, salons, services, staff } from "@/db/schema";
 import { env } from "@/lib/env";
 import { isSlotAvailable } from "@/lib/availability";
 import { requireStripe } from "@/lib/stripe";
+import { scheduleBookingAutomations } from "@/lib/automation";
 
 const inputSchema = z.object({
   slug: z.string(), serviceId: z.string().uuid(), staffId: z.string().uuid(), startsAt: z.string().datetime(),
@@ -60,7 +61,10 @@ export async function createBookingIntent(input: z.infer<typeof inputSchema>) {
     return created;
   });
 
-  if (depositCents === 0) return { bookingId: booking.id, clientSecret: null, discountAmountCents };
+  if (depositCents === 0) {
+    await scheduleBookingAutomations({ salonId: salon.id, bookingId: booking.id, triggers: ["booking_confirmed", "before_appointment"], appointmentTime: booking.startsAt });
+    return { bookingId: booking.id, clientSecret: null, discountAmountCents };
+  }
   if (!salon.stripeAccountId || !salon.stripeChargesEnabled) throw new Error("This salon is not ready to accept online deposits");
   const stripe = requireStripe();
   const applicationFee = Math.round(depositCents * (env.PLATFORM_FEE_PERCENT / 100));

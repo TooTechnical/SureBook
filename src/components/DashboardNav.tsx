@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, CalendarDays, CalendarRange, Contact, Handshake, LayoutDashboard, Megaphone, Scissors, Settings, Users } from "lucide-react";
+import { Bot, CalendarDays, CalendarRange, Contact, Handshake, LayoutDashboard, Megaphone, Scissors, Settings, Users, Workflow } from "lucide-react";
 import { Logo } from "./Logo";
 import { logoutAction } from "@/actions/auth";
 
@@ -11,6 +11,7 @@ const items = [
   ["/dashboard/staff", Users, "Staff"],
   ["/dashboard/customers", Contact, "Customers"],
   ["/dashboard/assistant", Bot, "SureBook Assistant"],
+  ["/dashboard/automations", Workflow, "Automations"],
   ["/dashboard/marketing", Megaphone, "Marketing & offers"],
   ["/dashboard/marketing/referrals", Handshake, "Referral links"],
   ["/dashboard/settings", Settings, "Settings"],
