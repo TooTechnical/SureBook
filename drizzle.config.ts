@@ -1,4 +1,5 @@
 import { defineConfig } from "drizzle-kit";
+import { sureBookTables } from "./drizzle.tables";
 
 export default defineConfig({
   schema: [
@@ -10,6 +11,9 @@ export default defineConfig({
   ],
   out: "./drizzle",
   dialect: "postgresql",
+  schemaFilter: ["public"],
+  tablesFilter: [...sureBookTables],
+  extensionsFilters: ["postgis"],
   dbCredentials: { url: process.env.DATABASE_URL! },
   strict: true,
   verbose: true,

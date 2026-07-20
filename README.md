@@ -259,6 +259,18 @@ npx drizzle-kit push
 
 Run this after pulling a branch that adds schema files. The Epics 7–10 branch requires the operations tables defined in `src/db/operations-schema.ts`; until they are applied, the core dashboard remains available but automation preferences and Growth Score history are read-only.
 
+For a production-controlled rollout of only the Epics 7–10 tables, use the transactional, PostGIS-guarded migration runner:
+
+```bash
+npm run db:operations
+```
+
+Drizzle Kit is restricted to the explicit SureBook table allowlist in `drizzle.tables.ts`. Its PostGIS extension filter excludes `geography_columns`, `geometry_columns` and `spatial_ref_sys` from introspection and push operations. Never bypass these filters or approve a command that proposes dropping extension-owned objects. Run the migration-safety tests before any schema push:
+
+```bash
+npm run test:migrations
+```
+
 Apply the geospatial marketplace migration when PostGIS is available:
 
 ```bash
