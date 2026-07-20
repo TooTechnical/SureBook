@@ -33,7 +33,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
       <div className="container" style={{ padding: "42px 0 80px" }}>
         <div style={{ maxWidth: 780, marginBottom: 30 }}><span className="badge">SureBook discovery</span><h1 style={{ fontSize: "clamp(42px,7vw,72px)", letterSpacing: "-.05em", lineHeight: 1.02 }}>Find trusted local services and book instantly.</h1><p style={{ fontSize: 19, color: "var(--muted)" }}>Explore verified appointment businesses across Ireland. Compare services, prices, photos and customer reviews before booking securely.</p></div>
 
-        <form className="card" style={{ padding: 18, display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 12, marginBottom: 30 }}>
+        <form className="card filter-grid" style={{ padding: 18, marginBottom: 30 }} role="search">
           <label><span className="label">What do you need?</span><input className="input" name="q" defaultValue={params.q || ""} placeholder="Sports massage, fade, facial..." /></label>
           <label><span className="label">Category</span><select className="input" name="category" defaultValue={category}>{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
           <label><span className="label">County or city</span><input className="input" name="county" defaultValue={params.county || ""} placeholder="Dublin" /></label>
@@ -42,7 +42,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}><h2 style={{ margin: 0 }}>{filtered.length} business{filtered.length === 1 ? "" : "es"} found</h2>{(query || county || category !== "All") && <a href="/discover">Clear filters</a>}</div>
 
-        {filtered.length === 0 ? <section className="card" style={{ padding: 40, textAlign: "center" }}><h2>No matching storefronts yet</h2><p>Try a broader service, category or location.</p></section> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 20 }}>{filtered.map((business) => {
+        {filtered.length === 0 ? <section className="card empty-state"><h2>No matching storefronts yet</h2><p>Try a broader service, category or location.</p><a className="btn btn-secondary" href="/discover">Clear all filters</a></section> : <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(300px,100%),1fr))", gap: 20 }}>{filtered.map((business) => {
           const approved = business.reviews.filter((review) => review.approved);
           const rating = approved.length ? approved.reduce((sum, review) => sum + review.rating, 0) / approved.length : null;
           const activeServices = business.services.filter((service) => service.active);
