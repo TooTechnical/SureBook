@@ -360,3 +360,4 @@ The submission video must remain under three minutes:
 ## Production note
 
 Before accepting live client payments, SureBook still requires final legal wording, privacy and processor terms, refund/dispute procedures, monitoring, accessibility review and a formal production security assessment. The Build Week deployment is intended as a functioning evaluation environment and commercial-quality product demonstration.
+
